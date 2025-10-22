@@ -1,98 +1,221 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import React from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Dimensions,
+  TouchableOpacity,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+const { width: screenWidth } = Dimensions.get('window');
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+
+const carouselItems = [
+  {
+    title: 'Bicicleta',
+    price: '$300.000',
+    message: 'Estás a $50.000 de obtenerlo',
+  },
+  {
+    title: 'Viaje',
+    price: '$1.500.000',
+    message: 'Estás a $500.000 de obtenerlo',
+  },
+];
+
+export default function HomeScreen() {
+  const [activeIndex, setActiveIndex] = React.useState(0);
+
+  const renderCarouselItem = (item: {
+    title: string;
+    price: string;
+    message: string;
+  }) => (
+    <View style={styles.carouselCard}>
+      <Text style={styles.carouselTitle}>{item.title}</Text>
+      <Text style={styles.carouselPrice}>{item.price}</Text>
+      <Text style={styles.carouselMessage}>{item.message}</Text>
+    </View>
+  );
+
+  const nextItem = () => {
+    setActiveIndex((prev) => (prev + 1) % carouselItems.length);
+  };
+
+  const prevItem = () => {
+    setActiveIndex((prev) =>
+      prev === 0 ? carouselItems.length - 1 : prev - 1
+    );
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.container}>
+        <View style={styles.headerBox}>
+          <Text style={styles.headerTitle}>Hola René</Text>
+          <Text style={styles.headerSub}>Mi presupuesto</Text>
+          <Text style={styles.headerAmount}>$750.000</Text>
+          <Text style={styles.headerSub}>Mis gastos</Text>
+          <Text style={styles.headerAmount}>$150.000</Text>
+        </View>
+
+        <View style={styles.optionsRow}>
+          <TouchableOpacity style={styles.optionCard}>
+            <Text style={styles.optionText}>Gestionar presupuesto</Text>
+            <Ionicons name="chevron-forward" size={20} color="#4B0082" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.optionCard}>
+            <Text style={styles.optionText}>Mi lista de deseos</Text>
+            <Ionicons name="chevron-forward" size={20} color="#4B0082" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.carouselContainer}>
+          {renderCarouselItem(carouselItems[activeIndex])}
+          <View style={styles.carouselControls}>
+            <TouchableOpacity onPress={prevItem}>
+              <Ionicons name="chevron-back" size={18} color="black" />
+            </TouchableOpacity>
+            <Ionicons name="ellipse" size={10} color="black" style={{ marginHorizontal: 6 }} />
+            <TouchableOpacity onPress={nextItem}>
+              <Ionicons name="chevron-forward" size={18} color="black" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.bottomNav}>
+          <View style={styles.navItem}>
+            <Ionicons name="home" size={20} color="black" />
+            <Text style={styles.navLabel}>Inicio</Text>
+          </View>
+          <View style={styles.navItem}>
+  <Link href="/wishlist" asChild>
+    <TouchableOpacity style={styles.navItem}>
+      <Ionicons name="heart" size={20} color="black" />
+      <Text style={styles.navLabel}>WishList</Text>
+    </TouchableOpacity>
+  </Link>
+</View>
+          <View style={styles.navItem}>
+            <Ionicons name="stats-chart" size={20} color="black" />
+            <Text style={styles.navLabel}>Balance</Text>
+          </View>
+          <View style={styles.navItem}>
+            <Ionicons name="person" size={20} color="black" />
+            <Text style={styles.navLabel}>Perfil</Text>
+          </View>
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  scrollContainer: {
+    flexGrow: 1,
+    backgroundColor: '#F8F8F8',
+    justifyContent: 'space-between',
+  },
+  container: {
+    flex: 1,
     alignItems: 'center',
-    gap: 8,
+    paddingVertical: 24,
+    paddingBottom: 80,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  headerBox: {
+    backgroundColor: '#6418C3',
+    borderRadius: 12,
+    padding: 20,
+    width: '90%',
+    alignItems: 'center',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  headerTitle: {
+    fontSize: 18,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  headerSub: {
+    fontSize: 14,
+    color: 'white',
+    marginTop: 6,
+  },
+  headerAmount: {
+    fontSize: 16,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  optionsRow: {
+    flexDirection: screenWidth > 700 ? 'row' : 'column',
+    width: '90%',
+    justifyContent: 'space-between',
+    marginVertical: 20,
+    gap: 12,
+  },
+  optionCard: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 10,
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    elevation: 2,
+  },
+  optionText: {
+    fontSize: 15,
+    color: '#4B0082',
+  },
+  carouselContainer: {
+    width: '90%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 24,
+    alignItems: 'center',
+    elevation: 2,
+  },
+  carouselCard: {
+    alignItems: 'center',
+  },
+  carouselTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  carouselPrice: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginTop: 4,
+  },
+  carouselMessage: {
+    marginTop: 4,
+    fontSize: 13,
+    color: 'gray',
+  },
+  carouselControls: {
+    flexDirection: 'row',
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderColor: '#ccc',
+    backgroundColor: 'white',
+    paddingVertical: 10,
+    width: '100%',
     position: 'absolute',
+    bottom: 0,
+  },
+  navItem: {
+    alignItems: 'center',
+  },
+  navLabel: {
+    fontSize: 12,
+    marginTop: 2,
   },
 });
