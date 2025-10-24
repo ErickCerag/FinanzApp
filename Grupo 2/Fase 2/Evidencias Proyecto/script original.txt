@@ -1,0 +1,77 @@
+Table Usuario [headercolor: #175e7a] {
+	id_usuario integer [ pk, increment, not null, unique ]
+	Nombre varchar(255)
+	"Apellido " varchar(255)
+	Correo varchar(255)
+	Contra varchar(255)
+	FechaNacim date
+}
+
+Table Categoria [headercolor: #175e7a] {
+	Nombre_categoria varchar(255) [ not null ]
+	Tipo_codigo integer [ pk, increment, not null ]
+}
+
+Table Movimiento [headercolor: #175e7a] {
+	id_movimiento integer [ pk, increment, not null, unique ]
+	id_usuario integer [ pk, not null ]
+	id_categoria integer [ pk ]
+	id_Procedencia integer
+	Tipo_movimiento varchar(255)
+	Titulo varchar(255)
+	Monto integer
+	Fecha_movimiento date
+	Descripcion varchar(255)
+	Ingreso boolean
+	Cuotas boolean
+	N_Cuotas integer
+	CuotasPagadas integer
+
+	indexes {
+		() [ name: 'Movimiento_index_0' ]
+	}
+}
+
+Table Presupuesto [headercolor: #175e7a] {
+	id_presupuesto integer [ pk, increment, not null, unique ]
+	id_usuario integer [ pk, not null ]
+	Anio integer
+	Mes integer
+}
+
+Table PresupuestoDetalle [headercolor: #175e7a] {
+	id_presupuestoDetalle integer [ pk, increment, not null, unique ]
+	Id_presupuesto integer [ pk ]
+	Monto decimal
+	Nombre varchar(255)
+}
+
+Table Wishlist [headercolor: #175e7a] {
+	id_wishlist integer [ pk, increment, not null, unique ]
+	Total decimal
+	id_usuario integer
+}
+
+Table WishListDetalle [headercolor: #175e7a] {
+	id_wishlistDetalle integer [ pk, increment, not null, unique ]
+	id_wishlist integer [ pk ]
+	Monto integer
+	Nombre varchar(255)
+}
+
+Table Procedencia [headercolor: #175e7a] {
+	id_procedencia integer [ pk, increment, not null, unique ]
+	Nombre_procedencia varchar(255)
+}
+
+Table Ahorro [headercolor: #175e7a] {
+	id_ahorro integer [ pk, increment, not null, unique ]
+	id_wishlistDetalle integer
+	Monto decimal
+}
+
+Table AhorroDetalle [headercolor: #175e7a] {
+	id_ahorroDetalle integer [ pk, increment, not null, unique ]
+	id_ahorro integer
+}
+
