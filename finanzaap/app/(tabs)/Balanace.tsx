@@ -41,7 +41,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function fetchTopExpensesLocal(): Promise<Expense[]> {
   await wait(500);
   return [
-    { name: "Arriendo", amount: 350000 },
+    { name: "Arriendo", amount: 350000  },
     { name: "Alimentación", amount: 100000 },
     { name: "Entretenimiento", amount: 50000 },
     { name: "Transporte", amount: 35000 },
@@ -153,9 +153,8 @@ export default function BalancePage() {
         style={{
           backgroundColor: PURPLE,
           paddingHorizontal: 16,
-          paddingVertical: 18,
-          borderBottomLeftRadius: 12,
-          borderBottomRightRadius: 12,
+          paddingVertical: 20,
+           
           shadowColor: "#000",
           shadowOpacity: 0.15,
           shadowRadius: 8,
@@ -203,6 +202,7 @@ export default function BalancePage() {
               borderColor: GRAY_BORDER,
               padding: 14,
               marginBottom: 16,
+              
             }}
           >
             <View
@@ -226,8 +226,8 @@ export default function BalancePage() {
                 onPress={handleFilter}
                 style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
-                <Text style={{ color: "#555", fontWeight: "600" }}>Filtrar</Text>
-                <Filter size={18} color="#111" />
+                <Text style={{ color: "#555", fontWeight: "600", fontSize: 20 }}>Filtrar</Text>
+                <Filter size={20} color="#111" />
               </TouchableOpacity>
             </View>
 
@@ -240,9 +240,9 @@ export default function BalancePage() {
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ color: "#111", fontSize: 16 }}>{e.name}</Text>
+                  <Text style={{ color: "#111", fontSize: 18 }}>{e.name}</Text>
                   <Text
-                    style={{ color: "#111", fontSize: 16, fontWeight: "600" }}
+                    style={{ color: "#111", fontSize: 18, fontWeight: "600" }}
                   >
                     {currency(e.amount)}
                   </Text>
@@ -258,7 +258,7 @@ export default function BalancePage() {
                 gap: 12,
               }}
             >
-              <Text style={{ color: PURPLE, fontWeight: "600" }}>
+              <Text style={{ color: PURPLE, fontWeight: "600", fontSize:18 }}>
                 Exportar datos :
               </Text>
               <TouchableOpacity
@@ -309,8 +309,8 @@ export default function BalancePage() {
               <View
                 style={{ flexDirection: "row", justifyContent: "space-between" }}
               >
-                <Text style={{ color: "#555" }}>Total</Text>
-                <Text style={{ color: "#111", fontWeight: "700" }}>
+                <Text style={{ color: "#555" , fontSize:18}}>Total</Text>
+                <Text style={{ color: "#111", fontWeight: "700", fontSize: 18 }}>
                   {currency(totalExpenses)}
                 </Text>
               </View>
@@ -325,6 +325,7 @@ export default function BalancePage() {
               borderWidth: 1,
               borderColor: GRAY_BORDER,
               padding: 14,
+              
             }}
           >
             <View
@@ -333,6 +334,8 @@ export default function BalancePage() {
                 alignItems: "center",
                 marginBottom: 10,
                 gap: 8,
+                
+              
               }}
             >
               <Text
@@ -345,9 +348,9 @@ export default function BalancePage() {
               >
                 Progreso de metas
               </Text>
-              <TrendingUp size={18} color="#111" />
-              <PieChart size={18} color="#111" />
-              <BarChart3 size={18} color="#111" />
+              <TrendingUp size={25} color="#111" />
+              <PieChart size={25} color="#111" />
+              <BarChart3 size={25} color="#111" />
             </View>
 
             <View style={{ gap: 14 }}>
@@ -360,8 +363,8 @@ export default function BalancePage() {
                       marginBottom: 6,
                     }}
                   >
-                    <Text style={{ color: "#111" }}>{g.name}</Text>
-                    <Text style={{ color: "#111", fontWeight: "600" }}>
+                    <Text style={{ color: "#111" , fontSize: 18}}>{g.name}</Text>
+                    <Text style={{ color: "#111", fontWeight: "600" , fontSize:18}}>
                       {g.progress} %
                     </Text>
                   </View>
@@ -373,6 +376,7 @@ export default function BalancePage() {
                       overflow: "hidden",
                       borderWidth: 1,
                       borderColor: "#e5e7eb",
+                      
                     }}
                   >
                     <View

@@ -55,7 +55,7 @@ export default function AddDeseo() {
 
   const [name, setName] = useState("Computador nuevo");
   const [amountRaw, setAmountRaw] = useState("750000");
-  const [deadline, setDeadline] = useState("2025-10-10"); // yyyy-MM-dd
+  const [deadline, setDeadline] = useState("2025-10-24"); // yyyy-MM-dd
   const [description, setDescription] = useState("Notebook HP i5 de Temu");
   const [saving, setSaving] = useState(false);
 
@@ -136,9 +136,7 @@ export default function AddDeseo() {
         style={{
           backgroundColor: "#6B21A8",
           paddingHorizontal: 16,
-          paddingVertical: 18,
-          borderBottomLeftRadius: 12,
-          borderBottomRightRadius: 12,
+          paddingVertical: 20,
           shadowColor: "#000",
           shadowOpacity: 0.15,
           shadowRadius: 8,
@@ -149,7 +147,7 @@ export default function AddDeseo() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
             <ArrowLeft color="#fff" size={22} />
           </TouchableOpacity>
-        <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginLeft: 12 }}>
+        <Text style={{ color: "#fff", fontSize: 26, fontWeight: "700", marginLeft: 12 }}>
             Registrar nuevo deseo
           </Text>
         </View>
@@ -158,11 +156,11 @@ export default function AddDeseo() {
       {/* Form */}
       <View style={{ padding: 18 }}>
         {/* Nombre */}
-        <Text style={{ color: "#6B21A8", fontWeight: "700", marginBottom: 6 }}>Nombre</Text>
+        <Text style={{ color: "#6B21A8", fontWeight: "700", marginBottom: 6, fontSize:20 }}>Nombre</Text>
         <TextInput placeholder="Ej. Bicicleta de ruta" value={name} onChangeText={setName} style={styles.input} />
 
         {/* Monto requerido */}
-        <Text style={{ color: "#6B21A8", fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
+        <Text style={{ color: "#6B21A8", fontWeight: "700", marginTop: 18, marginBottom: 6 , fontSize:20}}>
           Monto requerido
         </Text>
         <TextInput
@@ -175,9 +173,8 @@ export default function AddDeseo() {
 
         {/* Fecha límite */}
         <View style={{ flexDirection: "row", alignItems: "center", marginTop: 18, marginBottom: 6 }}>
-          <Text style={{ color: "#6B21A8", fontWeight: "700", flex: 1 }}>Fecha límite (Opcional)</Text>
+          <Text style={{ color: "#6B21A8", fontWeight: "700", flex: 1, fontSize:20 }}>Fecha límite (Opcional)</Text>
           <TouchableOpacity onPress={() => isNative ? setShowPicker(true) : null}>
-            <Calendar size={20} color="#6B21A8" />
           </TouchableOpacity>
         </View>
 
@@ -186,13 +183,16 @@ export default function AddDeseo() {
           <>
             <TouchableOpacity onPress={() => setShowPicker(true)}>
               <TextInput value={deadline} editable={false} style={[styles.input, { color: "#111" }]} />
+          
             </TouchableOpacity>
             {showPicker && (
               <DateTimePicker
                 value={dateObj}
                 mode="date"
+                
                 display={Platform.OS === "ios" ? "spinner" : "default"}
                 onChange={onChangeDate}
+                
               />
             )}
           </>
@@ -208,7 +208,7 @@ export default function AddDeseo() {
               padding: "10px 0",
               border: "none",
               borderBottom: "1px solid #e5e7eb",
-              fontSize: 16,
+              fontSize: 18,
               color: "#111827",
               outline: "none",
               background: "transparent",
@@ -219,8 +219,8 @@ export default function AddDeseo() {
         {/* Desglose de ahorro mensual */}
         {monthsNeeded != null && monthlyAmount != null && (
           <View style={{ marginTop: 12 }}>
-            <Text style={{ fontSize: 12, color: "#6B21A8", fontWeight: "700" }}>Plan sugerido</Text>
-            <Text style={{ marginTop: 4, color: "#111" }}>
+            <Text style={{ fontSize: 20, color: "#6B21A8", fontWeight: "700" }}>Plan sugerido</Text>
+            <Text style={{ marginTop: 4, color: "#111", fontSize:16 }}>
               Debes ahorrar {currencyCLP(monthlyAmount)} al mes durante {monthsNeeded}{" "}
               {monthsNeeded === 1 ? "mes" : "meses"} para llegar a {currencyCLP(amountNumber)} el {deadline || "-"}.
             </Text>
@@ -229,7 +229,7 @@ export default function AddDeseo() {
         )}
 
         {/* Descripción */}
-        <Text style={{ color: "#6B21A8", fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
+        <Text style={{ color: "#6B21A8", fontWeight: "700", marginTop: 18, marginBottom: 6,fontSize:20 }}>
           Descripción (Opcional)
         </Text>
         <TextInput
@@ -247,7 +247,7 @@ export default function AddDeseo() {
           disabled={!isValid || saving}
           style={[styles.button, { opacity: !isValid || saving ? 0.6 : 1 }]}
         >
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700" }}>Guardar deseo</Text>}
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700", fontSize:20 }}>Guardar deseo</Text>}
         </TouchableOpacity>
       </View>
     </View>
