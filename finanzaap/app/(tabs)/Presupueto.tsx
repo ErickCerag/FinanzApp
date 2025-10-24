@@ -397,10 +397,10 @@ export default function BudgetPage() {
 
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setShowExpenseModal(false)}>
-                <Text style={{ color: '#666' }}>Cancelar</Text>
+                <Text style={{ color: '#666' , fontSize: 20}}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleAddExpense}>
-                <Text style={{ color: PURPLE, fontWeight: '700' }}>Guardar</Text>
+                <Text style={{ color: PURPLE, fontWeight: '700' , fontSize: 20}}>Guardar</Text>
               </TouchableOpacity>
             </View>
           </View>
