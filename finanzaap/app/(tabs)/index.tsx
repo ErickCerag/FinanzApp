@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
+import { initDb } from '@/Service/DB_Conector';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -19,7 +20,7 @@ const carouselItems = [
 
 export default function HomeScreen() {
   const [activeIndex, setActiveIndex] = React.useState(0);
-
+initDb(); 
   const renderCarouselItem = (item: { title: string; price: string; message: string }) => (
     <View style={styles.carouselCard}>
       <Text style={styles.carouselTitle}>{item.title}</Text>
@@ -86,7 +87,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </Link>
 
-          <Link href="/balance" asChild>
+          <Link href="../balance" asChild>
             <TouchableOpacity style={styles.navItem}>
               <Ionicons name="stats-chart" size={20} color="black" />
               <Text style={styles.navLabel}>Balance</Text>

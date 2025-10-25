@@ -9,21 +9,10 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-// 👇 importa el picker (no falla en nativo; en web lo evitamos al renderizar)
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { ArrowLeft, Calendar } from "lucide-react";
+import { ArrowLeft, Calendar } from "lucide-react-native";
+import { agregarDeseo, crearWishlistSiNoExiste } from "@/Service/wishList/wishlist.service";
 
-type WishlistItem = {
-  name: string;
-  amount: number;
-  deadline?: string | null; // YYYY-MM-DD
-  description?: string | null;
-};
-
-const saveWishlistItem = async (item: WishlistItem) => {
-  await new Promise((r) => setTimeout(r, 800));
-  return true;
-};
 
 const currencyCLP = (n: number) =>
   new Intl.NumberFormat("es-CL", {
@@ -42,7 +31,6 @@ function diffMonthsInclusive(start: Date, end: Date) {
   const y2 = end.getFullYear();
   const m2 = end.getMonth();
   const d2 = end.getDate();
-
   let months = (y2 - y1) * 12 + (m2 - m1);
   if (d2 > d1) months += 1;
   return Math.max(1, months);
@@ -52,14 +40,11 @@ const isNative = Platform.OS === "ios" || Platform.OS === "android";
 
 export default function AddDeseo() {
   const router = useRouter();
-
   const [name, setName] = useState("Computador nuevo");
   const [amountRaw, setAmountRaw] = useState("750000");
-  const [deadline, setDeadline] = useState("2025-10-10"); // yyyy-MM-dd
+  const [deadline, setDeadline] = useState("2025-10-10");
   const [description, setDescription] = useState("Notebook HP i5 de Temu");
   const [saving, setSaving] = useState(false);
-
-  // 📅 control picker nativo
   const [showPicker, setShowPicker] = useState(false);
   const [dateObj, setDateObj] = useState(new Date(deadline));
 
@@ -73,15 +58,11 @@ export default function AddDeseo() {
       const end = deadline ? new Date(deadline) : null;
       if (!end) return { monthsNeeded: null, monthlyAmount: null, warning: "" };
 
-      const months = diffMonthsInclusive(
-        new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-        new Date(end.getFullYear(), end.getMonth(), end.getDate())
-      );
-
+      const months = diffMonthsInclusive(today, end);
       const perMonth = amountNumber > 0 ? Math.ceil(amountNumber / months) : 0;
-
       let warn = "";
-      if (end <= today) warn = "La fecha debe ser posterior a hoy; se considera 1 mes para el cálculo.";
+      if (end <= today)
+        warn = "La fecha debe ser posterior a hoy; se considera 1 mes para el cálculo.";
       return { monthsNeeded: months, monthlyAmount: perMonth, warning: warn };
     } catch {
       return { monthsNeeded: null, monthlyAmount: null, warning: "" };
@@ -93,18 +74,25 @@ export default function AddDeseo() {
       Alert.alert("Faltan datos", "Nombre y monto son obligatorios.");
       return;
     }
+
     try {
       setSaving(true);
-      await saveWishlistItem({
-        name: name.trim(),
-        amount: amountNumber,
-        deadline: deadline?.trim() || null,
-        description: description?.trim() || null,
-      });
-      Alert.alert("Éxito", "Deseo guardado correctamente.", [
+      const usuarioId = 1; // 👤 Usuario temporal
+      const wishlistId = await crearWishlistSiNoExiste(usuarioId);
+
+      await agregarDeseo(
+        wishlistId,
+        name.trim(),
+        amountNumber,
+        deadline?.trim() || null,
+        description?.trim() || null
+      );
+
+      Alert.alert("✅ Éxito", "Deseo guardado correctamente.", [
         { text: "OK", onPress: () => router.back() },
       ]);
-    } catch {
+    } catch (error) {
+      console.error("❌ Error al guardar el deseo:", error);
       Alert.alert("Error", "No se pudo guardar el deseo.");
     } finally {
       setSaving(false);
@@ -115,14 +103,12 @@ export default function AddDeseo() {
     setShowPicker(false);
     if (selectedDate) {
       setDateObj(selectedDate);
-      const formatted = selectedDate.toISOString().split("T")[0];
-      setDeadline(formatted);
+      setDeadline(selectedDate.toISOString().split("T")[0]);
     }
   };
 
-  // 👇 manejador para web (input date)
   const onChangeWebDate = (e: any) => {
-    const val = e?.target?.value as string; // yyyy-MM-dd
+    const val = e?.target?.value as string;
     if (val) {
       setDeadline(val);
       setDateObj(new Date(val));
@@ -131,7 +117,7 @@ export default function AddDeseo() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      {/* AppBar */}
+      {/* Header */}
       <View
         style={{
           backgroundColor: "#6B21A8",
@@ -139,9 +125,6 @@ export default function AddDeseo() {
           paddingVertical: 18,
           borderBottomLeftRadius: 12,
           borderBottomRightRadius: 12,
-          shadowColor: "#000",
-          shadowOpacity: 0.15,
-          shadowRadius: 8,
           elevation: 2,
         }}
       >
@@ -149,7 +132,7 @@ export default function AddDeseo() {
           <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
             <ArrowLeft color="#fff" size={22} />
           </TouchableOpacity>
-        <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginLeft: 12 }}>
+          <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginLeft: 12 }}>
             Registrar nuevo deseo
           </Text>
         </View>
@@ -157,11 +140,9 @@ export default function AddDeseo() {
 
       {/* Form */}
       <View style={{ padding: 18 }}>
-        {/* Nombre */}
         <Text style={{ color: "#6B21A8", fontWeight: "700", marginBottom: 6 }}>Nombre</Text>
         <TextInput placeholder="Ej. Bicicleta de ruta" value={name} onChangeText={setName} style={styles.input} />
 
-        {/* Monto requerido */}
         <Text style={{ color: "#6B21A8", fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
           Monto requerido
         </Text>
@@ -173,15 +154,13 @@ export default function AddDeseo() {
           style={styles.input}
         />
 
-        {/* Fecha límite */}
         <View style={{ flexDirection: "row", alignItems: "center", marginTop: 18, marginBottom: 6 }}>
           <Text style={{ color: "#6B21A8", fontWeight: "700", flex: 1 }}>Fecha límite (Opcional)</Text>
-          <TouchableOpacity onPress={() => isNative ? setShowPicker(true) : null}>
+          <TouchableOpacity onPress={() => (isNative ? setShowPicker(true) : null)}>
             <Calendar size={20} color="#6B21A8" />
           </TouchableOpacity>
         </View>
 
-        {/* Campo de fecha */}
         {isNative ? (
           <>
             <TouchableOpacity onPress={() => setShowPicker(true)}>
@@ -197,8 +176,8 @@ export default function AddDeseo() {
             )}
           </>
         ) : (
-          // 🌐 Web: input nativo del navegador
-          // @ts-ignore  — usamos input HTML directamente en RN Web
+          // 🌐 Web
+          // @ts-ignore
           <input
             type="date"
             value={deadline}
@@ -216,7 +195,7 @@ export default function AddDeseo() {
           />
         )}
 
-        {/* Desglose de ahorro mensual */}
+        {/* Plan sugerido */}
         {monthsNeeded != null && monthlyAmount != null && (
           <View style={{ marginTop: 12 }}>
             <Text style={{ fontSize: 12, color: "#6B21A8", fontWeight: "700" }}>Plan sugerido</Text>
@@ -228,7 +207,6 @@ export default function AddDeseo() {
           </View>
         )}
 
-        {/* Descripción */}
         <Text style={{ color: "#6B21A8", fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
           Descripción (Opcional)
         </Text>
@@ -241,7 +219,6 @@ export default function AddDeseo() {
           numberOfLines={4}
         />
 
-        {/* Guardar */}
         <TouchableOpacity
           onPress={handleSave}
           disabled={!isValid || saving}
