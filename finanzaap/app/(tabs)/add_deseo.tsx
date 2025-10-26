@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, KeyboardAvoidingView, Platform, ScrollView, Alert } from "react-native";
 import { ArrowLeft, Calendar } from "lucide-react-native";
 import { useRouter } from "expo-router";
+import { agregarDeseo, crearWishlistSiNoExiste } from "@/Service/wishList/wishlist.service";
+
 
 export default function AddDeseoScreen() {
   const router = useRouter();
@@ -9,6 +11,35 @@ export default function AddDeseoScreen() {
   const [monto, setMonto] = useState("");
   const [fecha, setFecha] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const parseMonto = (s: string) => Number((s || "").replace(/\D+/g, "")) || 0;
+
+  const onGuardar = async () => {
+    if (!nombre.trim() || !monto.trim()) {
+      Alert.alert("Faltan datos", "Por favor ingresa el nombre y el monto del deseo.");
+      return;
+    }
+    console.log("mamalo")
+    try {
+      setSaving(true);
+
+      // 👇 Usuario ficticio (aún no hay login)
+      const usuarioId = 1;
+      const wishlistId = await crearWishlistSiNoExiste(usuarioId);
+
+      const montoNum = parseMonto(monto);
+      await agregarDeseo(wishlistId, nombre.trim(), montoNum, fecha.trim() || null, descripcion.trim() || null);
+
+      Alert.alert("Listo", "El deseo fue guardado correctamente.");
+      router.back(); // volver a la lista
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "No se pudo guardar el deseo.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -17,17 +48,13 @@ export default function AddDeseoScreen() {
     >
       {/* Header */}
       <View className="bg-violet-700 px-6 pt-12 pb-5 flex-row items-center">
-        <Pressable onPress={() => router.back()} className="mr-4 p-2 rounded-xl hover:bg-violet-600/50">
+        <Pressable onPress={() => router.back()} className="mr-4 p-2 rounded-xl">
           <ArrowLeft size={22} color="white" />
         </Pressable>
         <Text className="text-white text-lg font-semibold">Registrar nuevo deseo</Text>
       </View>
 
-      <ScrollView
-        className="px-6"
-        contentContainerStyle={{ paddingBottom: 32 }}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView className="px-6" contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Nombre */}
         <Text className="mt-6 text-sm text-neutral-700 font-medium">Nombre</Text>
         <TextInput
@@ -37,7 +64,7 @@ export default function AddDeseoScreen() {
           className="border-b border-neutral-300 py-2 text-base"
         />
 
-        {/* Monto requerido */}
+        {/* Monto */}
         <Text className="mt-6 text-sm text-neutral-700 font-medium">Monto requerido</Text>
         <TextInput
           value={monto}
@@ -74,13 +101,11 @@ export default function AddDeseoScreen() {
 
         {/* Botón */}
         <Pressable
-          onPress={() => {
-            // lógica de guardado futura
-            router.back();
-          }}
+          onPress={onGuardar}
+          disabled={saving}
           className="mt-10 bg-violet-700 rounded-xl py-3 items-center shadow-lg active:opacity-90"
         >
-          <Text className="text-white font-medium">Guardar deseo</Text>
+          <Text className="text-white font-medium">{saving ? "Guardando..." : "Guardar deseo"}</Text>
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>

@@ -42,13 +42,13 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchIncomesLocal(): Promise<Income[]> {
   await wait(300);
-  return [{ id: 'i-1', name: 'Sueldo', amount: 1000000  }];
+  return [{ id: 'i-1', name: 'Sueldo', amount: 1000000 }];
 }
 
 async function fetchExpensesLocal(): Promise<Expense[]> {
   await wait(300);
   return [
-    { id: 'e-1', name: 'Alimentación', amount: 100000, day: 1, },
+    { id: 'e-1', name: 'Alimentación', amount: 100000, day: 1 },
     { id: 'e-2', name: 'Arriendo', amount: 350000, day: 5 },
   ];
 }
@@ -178,8 +178,9 @@ export default function BudgetPage() {
         style={{
           backgroundColor: PURPLE,
           paddingHorizontal: 16,
-          paddingVertical: 20,
-          
+          paddingVertical: 18,
+          borderBottomLeftRadius: 12,
+          borderBottomRightRadius: 12,
           shadowColor: '#000',
           shadowOpacity: 0.15,
           shadowRadius: 8,
@@ -193,7 +194,7 @@ export default function BudgetPage() {
           <Text
             style={{
               color: '#fff',
-              fontSize: 26,
+              fontSize: 18,
               fontWeight: '700',
               marginLeft: 12,
             }}
@@ -216,12 +217,12 @@ export default function BudgetPage() {
         <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
           {/* Totales */}
           <View style={{ paddingVertical: 18, alignItems: 'center' }}>
-            <Text style={{ color: '#444', marginBottom: 4 ,fontSize:20}}>Mi presupuesto</Text>
-            <Text style={{ fontSize: 28, fontWeight: '800' , }}>
+            <Text style={{ color: '#444', marginBottom: 4 }}>Mi presupuesto</Text>
+            <Text style={{ fontSize: 28, fontWeight: '800' }}>
               {currency(myBudget)}
             </Text>
 
-            <Text style={{ color: '#444', marginTop: 10, fontSize: 20 }}>Mis gastos</Text>
+            <Text style={{ color: '#444', marginTop: 10 }}>Mis gastos</Text>
             <Text style={{ fontSize: 28, fontWeight: '800' }}>
               {currency(totalExpenses)}
             </Text>
@@ -236,15 +237,14 @@ export default function BudgetPage() {
               borderBottomColor: GRAY_BORDER,
               paddingHorizontal: 16,
               paddingVertical: 12,
-              
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={{ color: PURPLE, fontSize: 26, fontWeight: '700', flex: 1 }}>
+              <Text style={{ color: PURPLE, fontSize: 20, fontWeight: '700', flex: 1 }}>
                 Ingresos
               </Text>
               <TouchableOpacity onPress={() => setShowIncomeModal(true)}>
-                <Plus color={PURPLE} size={26} />
+                <Plus color={PURPLE} size={22} />
               </TouchableOpacity>
             </View>
 
@@ -257,8 +257,8 @@ export default function BudgetPage() {
                   paddingVertical: 10,
                 }}
               >
-                <Text style={{ color: '#333', fontSize: 20 }}>{i.name}</Text>
-                <Text style={{ color: '#111', fontSize: 20, fontWeight: '700' }}>
+                <Text style={{ color: '#333', fontSize: 16 }}>{i.name}</Text>
+                <Text style={{ color: '#111', fontSize: 22, fontWeight: '700' }}>
                   {currency(i.amount)}
                 </Text>
               </View>
@@ -275,11 +275,11 @@ export default function BudgetPage() {
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={{ color: PURPLE, fontSize: 26, fontWeight: '700', flex: 1 }}>
+              <Text style={{ color: PURPLE, fontSize: 20, fontWeight: '700', flex: 1 }}>
                 Gastos
               </Text>
               <TouchableOpacity onPress={() => setShowExpenseModal(true)}>
-                <Plus color={PURPLE} size={26} />
+                <Plus color={PURPLE} size={22} />
               </TouchableOpacity>
             </View>
 
@@ -295,8 +295,8 @@ export default function BudgetPage() {
                 }}
               >
                 <View>
-                  <Text style={{ color: '#333', fontSize: 20 }}>{g.name}</Text>
-                  <Text style={{ color: '#777', fontSize: 16 }}>
+                  <Text style={{ color: '#333', fontSize: 16 }}>{g.name}</Text>
+                  <Text style={{ color: '#777', fontSize: 12 }}>
                     Gasto mensual el día {String(g.day).padStart(2, '0')}
                   </Text>
                 </View>
@@ -343,10 +343,10 @@ export default function BudgetPage() {
 
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setShowIncomeModal(false)}>
-                <Text style={{ color: '#666' , fontSize: 20}}>Cancelar</Text>
+                <Text style={{ color: '#666' }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleAddIncome}>
-                <Text style={{ color: PURPLE, fontWeight: '700' ,fontSize:20 }}>Guardar</Text>
+                <Text style={{ color: PURPLE, fontWeight: '700' }}>Guardar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -397,10 +397,10 @@ export default function BudgetPage() {
 
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setShowExpenseModal(false)}>
-                <Text style={{ color: '#666' , fontSize: 20}}>Cancelar</Text>
+                <Text style={{ color: '#666' }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleAddExpense}>
-                <Text style={{ color: PURPLE, fontWeight: '700' , fontSize: 20}}>Guardar</Text>
+                <Text style={{ color: PURPLE, fontWeight: '700' }}>Guardar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: GRAY_BORDER,
     paddingVertical: 10,
-    fontSize: 20,
+    fontSize: 16,
     color: '#111827',
   },
   modalBackdrop: {
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     marginBottom: 10,
   },
