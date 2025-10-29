@@ -1,7 +1,7 @@
 // Service/user/user.service.web.ts
 import type { Usuario } from "./user.service";
 
-const KEY = "usuario_v1"; // almacena un único usuario (id=1) en localStorage
+const KEY = "usuario_v1"; // guarda un único usuario (id=1) en localStorage
 
 export async function obtenerUsuario(id: number): Promise<Usuario | null> {
   try {

@@ -6,12 +6,13 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Link, type Href, useFocusEffect } from "expo-router";
+import { Link, useFocusEffect } from "expo-router";
 import { initDb } from "@/Service/DB_Conector";
-import { obtenerUsuario } from "@/Service/user/user.service"; // 👈 nuevo import
-import BottomNav from "@/components/BarraNav"; // 👈 barra global
+import { obtenerUsuario } from "@/Service/user/user.service";
+import BottomNav from "@/components/BarraNav";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -22,21 +23,21 @@ const carouselItems = [
 
 export default function HomeScreen() {
   const [activeIndex, setActiveIndex] = React.useState(0);
-  const [nombre, setNombre] = React.useState<string>("René"); // 👈 inicial por defecto
+  const [nombre, setNombre] = React.useState<string>("René");
+  const [avatar, setAvatar] = React.useState<string | null>(null);
 
   initDb();
 
-  // 👇 Cargar nombre del usuario desde SQLite/localStorage
   useFocusEffect(
     React.useCallback(() => {
       let alive = true;
       (async () => {
-        const u = await obtenerUsuario(1); // usuario temporal
-        if (alive && u?.Nombre) setNombre(u.Nombre);
+        const u = await obtenerUsuario(1);
+        if (!alive) return;
+        if (u?.Nombre) setNombre(u.Nombre);
+        setAvatar(u?.Avatar ?? null);
       })();
-      return () => {
-        alive = false;
-      };
+      return () => { alive = false; };
     }, [])
   );
 
@@ -48,18 +49,19 @@ export default function HomeScreen() {
     </View>
   );
 
-  const nextItem = () =>
-    setActiveIndex((prev) => (prev + 1) % carouselItems.length);
-  const prevItem = () =>
-    setActiveIndex((prev) =>
-      prev === 0 ? carouselItems.length - 1 : prev - 1
-    );
+  const nextItem = () => setActiveIndex((p) => (p + 1) % carouselItems.length);
+  const prevItem = () => setActiveIndex((p) => (p === 0 ? carouselItems.length - 1 : p - 1));
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>
-        {/* 🔹 Cabecera */}
+        {/* Header con avatar y saludo */}
         <View style={styles.headerBox}>
+          {avatar ? (
+            <Image source={{ uri: avatar }} style={styles.headerAvatar} />
+          ) : (
+            <Ionicons name="person-circle" size={72} color="white" style={{ marginBottom: 8 }} />
+          )}
           <Text style={styles.headerTitle}>Hola {nombre}</Text>
           <Text style={styles.headerSub}>Mi presupuesto</Text>
           <Text style={styles.headerAmount}>$750.000</Text>
@@ -67,7 +69,6 @@ export default function HomeScreen() {
           <Text style={styles.headerAmount}>$150.000</Text>
         </View>
 
-        {/* 🔹 Opciones */}
         <View style={styles.optionsRow}>
           <Link href="/(tabs)/Presupueto" asChild>
             <TouchableOpacity style={styles.optionCard}>
@@ -84,26 +85,19 @@ export default function HomeScreen() {
           </Link>
         </View>
 
-        {/* 🔹 Carrusel */}
         <View style={styles.carouselContainer}>
           {renderCarouselItem(carouselItems[activeIndex])}
           <View style={styles.carouselControls}>
             <TouchableOpacity onPress={prevItem}>
               <Ionicons name="chevron-back" size={18} color="black" />
             </TouchableOpacity>
-            <Ionicons
-              name="ellipse"
-              size={10}
-              color="black"
-              style={{ marginHorizontal: 6 }}
-            />
+            <Ionicons name="ellipse" size={10} color="black" style={{ marginHorizontal: 6 }} />
             <TouchableOpacity onPress={nextItem}>
               <Ionicons name="chevron-forward" size={18} color="black" />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 🔹 Barra de navegación global */}
         <BottomNav active="home" />
       </View>
     </ScrollView>
@@ -111,17 +105,8 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    flexGrow: 1,
-    backgroundColor: "#F8F8F8",
-    justifyContent: "space-between",
-  },
-  container: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 24,
-    paddingBottom: 80,
-  },
+  scrollContainer: { flexGrow: 1, backgroundColor: "#F8F8F8", justifyContent: "space-between" },
+  container: { flex: 1, alignItems: "center", paddingVertical: 24, paddingBottom: 80 },
   headerBox: {
     backgroundColor: "#6418C3",
     borderRadius: 12,
@@ -129,21 +114,17 @@ const styles = StyleSheet.create({
     width: "90%",
     alignItems: "center",
   },
-  headerTitle: {
-    fontSize: 18,
-    color: "white",
-    fontWeight: "bold",
+  headerAvatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.6)",
   },
-  headerSub: {
-    fontSize: 14,
-    color: "white",
-    marginTop: 6,
-  },
-  headerAmount: {
-    fontSize: 16,
-    color: "white",
-    fontWeight: "bold",
-  },
+  headerTitle: { fontSize: 18, color: "white", fontWeight: "bold" },
+  headerSub: { fontSize: 14, color: "white", marginTop: 6 },
+  headerAmount: { fontSize: 16, color: "white", fontWeight: "bold" },
   optionsRow: {
     flexDirection: screenWidth > 700 ? "row" : "column",
     width: "90%",
@@ -177,4 +158,3 @@ const styles = StyleSheet.create({
   carouselMessage: { marginTop: 4, fontSize: 13, color: "gray" },
   carouselControls: { flexDirection: "row", marginTop: 12, alignItems: "center" },
 });
-

@@ -1,6 +1,4 @@
-// app/(tabs)/Perfil.tsx
 import React, { useEffect, useState } from "react";
-
 import {
   View,
   Text,
@@ -30,18 +28,17 @@ export default function PerfilPage() {
 
   const [avatar, setAvatar] = useState<string | null>(null);
   const [name, setName] = useState("René Ignacio");
-  const [phone, setPhone] = useState("929845637");
   const [email, setEmail] = useState("Rene.puentes@gmail.com");
   const [saving, setSaving] = useState(false);
 
-  // ✅ cargar datos guardados
+  // Cargar datos guardados
   useEffect(() => {
     const load = async () => {
-      const u = await obtenerUsuario(1); // usuario temporal
+      const u = await obtenerUsuario(1);
       if (u) {
         setName(u.Nombre || "");
-        setPhone(u.Telefono || "");
         setEmail(u.Correo || "");
+        setAvatar(u.Avatar || null);
       }
     };
     load();
@@ -68,8 +65,8 @@ export default function PerfilPage() {
       await upsertUsuario({
         id_usuario: 1,
         Nombre: name.trim(),
-        Telefono: phone.trim(),
         Correo: email.trim(),
+        Avatar: avatar ?? null,
       });
       Alert.alert("Listo", "Datos guardados correctamente.");
     } catch (e) {
@@ -120,7 +117,7 @@ export default function PerfilPage() {
             </View>
 
             {/* Campos */}
-            <View className="fieldGroup" style={styles.fieldGroup}>
+            <View style={styles.fieldGroup}>
               <Text style={styles.label}>Nombre</Text>
               <TextInput
                 value={name}
@@ -128,19 +125,6 @@ export default function PerfilPage() {
                 placeholder="Tu nombre"
                 style={styles.input}
                 autoCapitalize="words"
-                returnKeyType="next"
-              />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Teléfono</Text>
-              <TextInput
-                value={phone}
-                onChangeText={(t) => setPhone(t.replace(/\D+/g, ""))}
-                placeholder="Ej: 912345678"
-                style={styles.input}
-                keyboardType="phone-pad"
-                maxLength={12}
                 returnKeyType="next"
               />
             </View>
@@ -170,7 +154,7 @@ export default function PerfilPage() {
           </ScrollView>
         </KeyboardAvoidingView>
 
-        {/* Barra de navegación común */}
+        {/* Barra de navegación */}
         <BottomNav active="profile" />
       </SafeAreaView>
     </>
@@ -202,13 +186,8 @@ const styles = StyleSheet.create({
   },
   avatarWrap: { alignItems: "center", gap: 8, width: "100%" },
   avatarButton: {
-    width: 112,
-    height: 112,
-    borderRadius: 999,
-    borderColor: BORDER,
-    borderWidth: 1,
-    overflow: "hidden",
-    backgroundColor: "white",
+    width: 112, height: 112, borderRadius: 999,
+    borderColor: BORDER, borderWidth: 1, overflow: "hidden", backgroundColor: "white",
   },
   avatarImg: { width: "100%", height: "100%" },
   avatarPlaceholder: { flex: 1, justifyContent: "center", alignItems: "center" },
@@ -216,27 +195,14 @@ const styles = StyleSheet.create({
   fieldGroup: { width: "90%", maxWidth: 520 },
   label: { color: GRAY, fontSize: 12, marginBottom: 6 },
   input: {
-    backgroundColor: "white",
-    borderColor: BORDER,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 44,
-    fontSize: 16,
+    backgroundColor: "white", borderColor: BORDER, borderWidth: 1,
+    borderRadius: 12, paddingHorizontal: 14, height: 44, fontSize: 16,
   },
   saveBtn: {
-    width: "90%",
-    maxWidth: 520,
-    backgroundColor: PURPLE,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 1,
-    marginTop: 8,
+    width: "90%", maxWidth: 520, backgroundColor: PURPLE, borderRadius: 14,
+    paddingVertical: 14, alignItems: "center",
+    shadowColor: "#000", shadowOpacity: 0.08, shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6, elevation: 1, marginTop: 8,
   },
   saveText: { color: "white", fontWeight: "700" },
 });

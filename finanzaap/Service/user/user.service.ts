@@ -2,8 +2,8 @@
 export type Usuario = {
   id_usuario: number;
   Nombre: string;
-  Telefono: string | null;
-  Correo: string | null;
+  Correo?: string | null;
+  Avatar?: string | null; // URI de la imagen (ImagePicker/web)
 };
 
 export async function obtenerUsuario(_id: number): Promise<Usuario | null> {

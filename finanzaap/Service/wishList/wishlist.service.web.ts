@@ -1,4 +1,6 @@
-// Service/wishlist.service.web.ts
+// Service/wishList/wishlist.service.web.ts
+import type { WishlistRow, WishlistItemRow } from "./wishlist.service";
+
 type Item = {
   id: string;
   nombre: string;
@@ -6,46 +8,25 @@ type Item = {
   fechaLimite?: string | null;
   descripcion?: string | null;
 };
-const KEY = "wishlists_v1"; // { [usuarioId]: { items: Item[], total: number } }
 
-function load(): Record<string, { items: Item[]; total: number }> {
-  try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; }
-}
-function save(db: Record<string, { items: Item[]; total: number }>) {
-  localStorage.setItem(KEY, JSON.stringify(db));
-}
+type Bucket = { items: Item[]; total: number };
+type DB = Record<string, Bucket>;
 
-// 📋 Obtener deseos desde localStorage
-export async function obtenerWishlist(idUsuario: number): Promise<any[]> {
-  console.log("💻 [Wishlist-Web] Cargando deseos desde localStorage...");
-  const db = load();
-  const k = String(idUsuario);
-  const items = db[k]?.items ?? [];
-  console.log(`✅ [Wishlist-Web] ${items.length} deseos obtenidos`);
-  // Ajustamos estructura para que coincida con la del móvil
-  return items.map((x) => ({
-    id: x.id,
-    name: x.nombre,
-    price: x.monto,
-    savedGap: 0,
-    done: false,
-    note: "",
-  }));
-}
+const KEY = "wishlists_v1";
 
+function load(): DB {
+  try { return JSON.parse(localStorage.getItem(KEY) || "{}"); }
+  catch { return {}; }
+}
+function save(db: DB) { localStorage.setItem(KEY, JSON.stringify(db)); }
 
 export async function crearWishlistSiNoExiste(idUsuario: number): Promise<number> {
-  console.log("📦 [Wishlist-Web] Verificando wishlist para usuario:", idUsuario);
   const db = load();
   const k = String(idUsuario);
-  if (!db[k]) {
-    console.log("🆕 [Wishlist-Web] No existe. Creando…");
-    db[k] = { items: [], total: 0 };
-    save(db);
-  } else {
-    console.log("✅ [Wishlist-Web] Ya existe.");
-  }
-  return idUsuario; // usamos idUsuario como idWishlist en web
+  if (!db[k]) db[k] = { items: [], total: 0 };
+  save(db);
+  // En web usamos idUsuario como id_wishlist
+  return idUsuario;
 }
 
 export async function agregarDeseo(
@@ -55,7 +36,6 @@ export async function agregarDeseo(
   fechaLimite?: string | null,
   descripcion?: string | null
 ): Promise<number> {
-  console.log("➕ [Wishlist-Web] Agregando deseo:", { idWishlist, nombre, monto, fechaLimite, descripcion });
   const db = load();
   const k = String(idWishlist);
   if (!db[k]) db[k] = { items: [], total: 0 };
@@ -66,11 +46,28 @@ export async function agregarDeseo(
     nombre,
     monto: Number(monto) || 0,
     fechaLimite: fechaLimite ?? null,
-    descripcion: descripcion ?? null
+    descripcion: descripcion ?? null,
   });
   db[k].total = db[k].items.reduce((a, b) => a + (b.monto || 0), 0);
   save(db);
-
-  console.log("✅ [Wishlist-Web] Guardado. Total:", db[k].total, "Items:", db[k].items.length);
   return Date.now();
+}
+
+export async function obtenerWishlistConItems(
+  idUsuario: number
+): Promise<{ wishlist: WishlistRow | null; items: WishlistItemRow[] }> {
+  const db = load();
+  const k = String(idUsuario);
+  const bucket = db[k] ?? { items: [], total: 0 };
+
+  const wl: WishlistRow = { id_wishlist: idUsuario, Total: bucket.total };
+  const items: WishlistItemRow[] = bucket.items.map((x) => ({
+    id_wishlistDetalle: Number.NaN,       // no aplica en Web
+    Nombre: x.nombre,
+    Monto: x.monto,
+    FechaLimite: x.fechaLimite ?? null,
+    Descripcion: x.descripcion ?? null,
+  }));
+
+  return { wishlist: wl, items };
 }
