@@ -164,12 +164,12 @@ export default function BalancePage() {
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
-            <ArrowLeft color="#fff" size={22} />
+            <ArrowLeft color="#fff" size={40} />
           </TouchableOpacity>
           <Text
             style={{
               color: "#fff",
-              fontSize: 18,
+              fontSize: 30,
               fontWeight: "700",
               marginLeft: 12,
             }}

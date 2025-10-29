@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   View,
   Text,
@@ -6,21 +6,40 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Link } from 'expo-router';
-import { initDb } from '@/Service/DB_Conector';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Link, type Href, useFocusEffect } from "expo-router";
+import { initDb } from "@/Service/DB_Conector";
+import { obtenerUsuario } from "@/Service/user/user.service"; // 👈 nuevo import
+import BottomNav from "@/components/BarraNav"; // 👈 barra global
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get("window");
 
 const carouselItems = [
-  { title: 'Bicicleta', price: '$300.000', message: 'Estás a $50.000 de obtenerlo' },
-  { title: 'Viaje',     price: '$1.500.000', message: 'Estás a $500.000 de obtenerlo' },
+  { title: "Bicicleta", price: "$300.000", message: "Estás a $50.000 de obtenerlo" },
+  { title: "Viaje", price: "$1.500.000", message: "Estás a $500.000 de obtenerlo" },
 ];
 
 export default function HomeScreen() {
   const [activeIndex, setActiveIndex] = React.useState(0);
-initDb(); 
+  const [nombre, setNombre] = React.useState<string>("René"); // 👈 inicial por defecto
+
+  initDb();
+
+  // 👇 Cargar nombre del usuario desde SQLite/localStorage
+  useFocusEffect(
+    React.useCallback(() => {
+      let alive = true;
+      (async () => {
+        const u = await obtenerUsuario(1); // usuario temporal
+        if (alive && u?.Nombre) setNombre(u.Nombre);
+      })();
+      return () => {
+        alive = false;
+      };
+    }, [])
+  );
+
   const renderCarouselItem = (item: { title: string; price: string; message: string }) => (
     <View style={styles.carouselCard}>
       <Text style={styles.carouselTitle}>{item.title}</Text>
@@ -29,22 +48,27 @@ initDb();
     </View>
   );
 
-  const nextItem = () => setActiveIndex((prev) => (prev + 1) % carouselItems.length);
-  const prevItem = () => setActiveIndex((prev) => (prev === 0 ? carouselItems.length - 1 : prev - 1));
+  const nextItem = () =>
+    setActiveIndex((prev) => (prev + 1) % carouselItems.length);
+  const prevItem = () =>
+    setActiveIndex((prev) =>
+      prev === 0 ? carouselItems.length - 1 : prev - 1
+    );
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>
+        {/* 🔹 Cabecera */}
         <View style={styles.headerBox}>
-          <Text style={styles.headerTitle}>Hola René</Text>
+          <Text style={styles.headerTitle}>Hola {nombre}</Text>
           <Text style={styles.headerSub}>Mi presupuesto</Text>
           <Text style={styles.headerAmount}>$750.000</Text>
           <Text style={styles.headerSub}>Mis gastos</Text>
           <Text style={styles.headerAmount}>$150.000</Text>
         </View>
 
+        {/* 🔹 Opciones */}
         <View style={styles.optionsRow}>
-          {/* ✅ Link envuelve al Touchable y tiene UN solo hijo */}
           <Link href="/(tabs)/Presupueto" asChild>
             <TouchableOpacity style={styles.optionCard}>
               <Text style={styles.optionText}>Gestionar presupuesto</Text>
@@ -60,68 +84,97 @@ initDb();
           </Link>
         </View>
 
+        {/* 🔹 Carrusel */}
         <View style={styles.carouselContainer}>
           {renderCarouselItem(carouselItems[activeIndex])}
           <View style={styles.carouselControls}>
             <TouchableOpacity onPress={prevItem}>
               <Ionicons name="chevron-back" size={18} color="black" />
             </TouchableOpacity>
-            <Ionicons name="ellipse" size={10} color="black" style={{ marginHorizontal: 6 }} />
+            <Ionicons
+              name="ellipse"
+              size={10}
+              color="black"
+              style={{ marginHorizontal: 6 }}
+            />
             <TouchableOpacity onPress={nextItem}>
               <Ionicons name="chevron-forward" size={18} color="black" />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.bottomNav}>
-          {/* Puedes añadir Link aquí si quieres que "Inicio" navegue a otra ruta */}
-          <View style={styles.navItem}>
-            <Ionicons name="home" size={20} color="black" />
-            <Text style={styles.navLabel}>Inicio</Text>
-          </View>
-
-          <Link href="/WishList/wishlist" asChild>
-            <TouchableOpacity style={styles.navItem}>
-              <Ionicons name="heart" size={20} color="black" />
-              <Text style={styles.navLabel}>WishList</Text>
-            </TouchableOpacity>
-          </Link>
-
-          <Link href="../balance" asChild>
-            <TouchableOpacity style={styles.navItem}>
-              <Ionicons name="stats-chart" size={20} color="black" />
-              <Text style={styles.navLabel}>Balance</Text>
-            </TouchableOpacity>
-          </Link>
-
-          {/* Ejemplo sin navegación todavía */}
-          <View style={styles.navItem}>
-            <Ionicons name="person" size={20} color="black" />
-            <Text style={styles.navLabel}>Perfil</Text>
-          </View>
-        </View>
+        {/* 🔹 Barra de navegación global */}
+        <BottomNav active="home" />
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: { flexGrow: 1, backgroundColor: '#F8F8F8', justifyContent: 'space-between' },
-  container: { flex: 1, alignItems: 'center', paddingVertical: 24, paddingBottom: 80 },
-  headerBox: { backgroundColor: '#6418C3', borderRadius: 12, padding: 20, width: '90%', alignItems: 'center' },
-  headerTitle: { fontSize: 18, color: 'white', fontWeight: 'bold' },
-  headerSub: { fontSize: 14, color: 'white', marginTop: 6 },
-  headerAmount: { fontSize: 16, color: 'white', fontWeight: 'bold' },
-  optionsRow: { flexDirection: screenWidth > 700 ? 'row' : 'column', width: '90%', justifyContent: 'space-between', marginVertical: 20, gap: 12 },
-  optionCard: { backgroundColor: 'white', padding: 16, borderRadius: 10, flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', elevation: 2 },
-  optionText: { fontSize: 15, color: '#4B0082' },
-  carouselContainer: { width: '90%', backgroundColor: 'white', borderRadius: 10, padding: 20, marginBottom: 24, alignItems: 'center', elevation: 2 },
-  carouselCard: { alignItems: 'center' },
-  carouselTitle: { fontWeight: 'bold', fontSize: 16 },
-  carouselPrice: { fontWeight: 'bold', fontSize: 16, marginTop: 4 },
-  carouselMessage: { marginTop: 4, fontSize: 13, color: 'gray' },
-  carouselControls: { flexDirection: 'row', marginTop: 12, alignItems: 'center' },
-  bottomNav: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopWidth: 1, borderColor: '#ccc', backgroundColor: 'white', paddingVertical: 10, width: '100%', position: 'absolute', bottom: 0 },
-  navItem: { alignItems: 'center' },
-  navLabel: { fontSize: 12, marginTop: 2 },
+  scrollContainer: {
+    flexGrow: 1,
+    backgroundColor: "#F8F8F8",
+    justifyContent: "space-between",
+  },
+  container: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 24,
+    paddingBottom: 80,
+  },
+  headerBox: {
+    backgroundColor: "#6418C3",
+    borderRadius: 12,
+    padding: 20,
+    width: "90%",
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 18,
+    color: "white",
+    fontWeight: "bold",
+  },
+  headerSub: {
+    fontSize: 14,
+    color: "white",
+    marginTop: 6,
+  },
+  headerAmount: {
+    fontSize: 16,
+    color: "white",
+    fontWeight: "bold",
+  },
+  optionsRow: {
+    flexDirection: screenWidth > 700 ? "row" : "column",
+    width: "90%",
+    justifyContent: "space-between",
+    marginVertical: 20,
+    gap: 12,
+  },
+  optionCard: {
+    backgroundColor: "white",
+    padding: 16,
+    borderRadius: 10,
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    elevation: 2,
+  },
+  optionText: { fontSize: 15, color: "#4B0082" },
+  carouselContainer: {
+    width: "90%",
+    backgroundColor: "white",
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 24,
+    alignItems: "center",
+    elevation: 2,
+  },
+  carouselCard: { alignItems: "center" },
+  carouselTitle: { fontWeight: "bold", fontSize: 16 },
+  carouselPrice: { fontWeight: "bold", fontSize: 16, marginTop: 4 },
+  carouselMessage: { marginTop: 4, fontSize: 13, color: "gray" },
+  carouselControls: { flexDirection: "row", marginTop: 12, alignItems: "center" },
 });
+

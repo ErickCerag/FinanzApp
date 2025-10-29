@@ -130,9 +130,9 @@ export default function AddDeseo() {
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
-            <ArrowLeft color="#fff" size={22} />
+            <ArrowLeft color="#fff" size={40} />
           </TouchableOpacity>
-          <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginLeft: 12 }}>
+          <Text style={{ color: "#fff", fontSize: 30, fontWeight: "700", marginLeft: 12 }}>
             Registrar nuevo deseo
           </Text>
         </View>
@@ -236,7 +236,7 @@ const styles = {
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
     paddingVertical: 10,
-    fontSize: 16,
+    fontSize: 20,
     color: "#111827",
   } as const,
   button: {
