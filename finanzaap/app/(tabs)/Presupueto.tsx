@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   Alert,
   Platform,
   StyleSheet,
+  KeyboardAvoidingView,
+  InputAccessoryView,
+  Keyboard,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,6 +23,7 @@ import { ArrowLeft, Plus } from "lucide-react-native";
    ========================= */
 const PURPLE = "#6B21A8";
 const GRAY_BORDER = "#E5E7EB";
+const isIOS = Platform.OS === "ios";
 
 const currency = (v: number) =>
   new Intl.NumberFormat("es-CL", {
@@ -65,6 +69,29 @@ async function addExpenseLocal(item: Omit<Expense, "id">): Promise<Expense> {
 }
 
 /* =========================
+   Barra "Listo" para iOS
+   ========================= */
+function DoneBar({
+  nativeID,
+  onDone,
+}: {
+  nativeID: string;
+  onDone: () => void;
+}) {
+  if (!isIOS) return null;
+  return (
+    <InputAccessoryView nativeID={nativeID}>
+      <View style={styles.accessoryBar}>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity onPress={onDone} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.accessoryBtn}>Listo</Text>
+        </TouchableOpacity>
+      </View>
+    </InputAccessoryView>
+  );
+}
+
+/* =========================
    Componente principal
    ========================= */
 export default function BudgetPage() {
@@ -88,6 +115,11 @@ export default function BudgetPage() {
   const [expenseName, setExpenseName] = useState("");
   const [expenseAmountRaw, setExpenseAmountRaw] = useState("");
   const [expenseDayRaw, setExpenseDayRaw] = useState("01");
+
+  // refs para blur() cuando se toque "Listo"
+  const refIncomeAmount = useRef<TextInput>(null);
+  const refExpenseAmount = useRef<TextInput>(null);
+  const refExpenseDay = useRef<TextInput>(null);
 
   useEffect(() => {
     let cancel = false;
@@ -181,7 +213,7 @@ export default function BudgetPage() {
       <View
         style={{
           backgroundColor: PURPLE,
-          paddingTop: insets.top + 10, // 👈 respeta notch / barra de estado
+          paddingTop: insets.top + 10,
           paddingHorizontal: 16,
           paddingBottom: 18,
           borderBottomLeftRadius: 12,
@@ -229,7 +261,7 @@ export default function BudgetPage() {
       ) : (
         <ScrollView
           contentContainerStyle={{
-            paddingBottom: (insets.bottom || 0) + 24, // deja aire por el BottomNav
+            paddingBottom: (insets.bottom || 0) + 24,
           }}
         >
           {/* Totales */}
@@ -334,40 +366,58 @@ export default function BudgetPage() {
         onRequestClose={() => setShowIncomeModal(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Agregar ingreso</Text>
+          <KeyboardAvoidingView
+            behavior={isIOS ? "padding" : undefined}
+            keyboardVerticalOffset={isIOS ? 12 : 0}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Agregar ingreso</Text>
 
-            <Text style={styles.label}>Nombre</Text>
-            <TextInput
-              value={incomeName}
-              onChangeText={setIncomeName}
-              placeholder="Ej: Sueldo"
-              style={styles.input}
-            />
+              <Text style={styles.label}>Nombre</Text>
+              <TextInput
+                value={incomeName}
+                onChangeText={setIncomeName}
+                placeholder="Ej: Sueldo"
+                style={styles.input}
+                returnKeyType="next"
+                blurOnSubmit
+              />
 
-            <Text style={[styles.label, { marginTop: 12 }]}>Monto</Text>
-            <TextInput
-              value={
-                Number(onlyDigits(incomeAmountRaw) || "0") > 0
-                  ? currency(Number(onlyDigits(incomeAmountRaw)))
-                  : ""
-              }
-              onChangeText={(t) => setIncomeAmountRaw(onlyDigits(t))}
-              placeholder="$ 0"
-              keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
-              style={styles.input}
-            />
+              <Text style={[styles.label, { marginTop: 12 }]}>Monto</Text>
+              <TextInput
+                ref={refIncomeAmount}
+                value={
+                  Number(onlyDigits(incomeAmountRaw) || "0") > 0
+                    ? currency(Number(onlyDigits(incomeAmountRaw)))
+                    : ""
+                }
+                onChangeText={(t) => setIncomeAmountRaw(onlyDigits(t))}
+                placeholder="$ 0"
+                keyboardType={isIOS ? "number-pad" : "numeric"}
+                style={styles.input}
+                inputAccessoryViewID={isIOS ? "acc-income" : undefined}
+              />
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setShowIncomeModal(false)}>
-                <Text style={{ color: "#666" }}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleAddIncome}>
-                <Text style={{ color: PURPLE, fontWeight: "700" }}>Guardar</Text>
-              </TouchableOpacity>
+              <View style={styles.modalActions}>
+                <TouchableOpacity onPress={() => setShowIncomeModal(false)}>
+                  <Text style={{ color: "#666" }}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleAddIncome}>
+                  <Text style={{ color: PURPLE, fontWeight: "700" }}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
+
+        {/* Barra "Listo" iOS para Monto (Ingreso) */}
+        <DoneBar
+          nativeID="acc-income"
+          onDone={() => {
+            refIncomeAmount.current?.blur();
+            Keyboard.dismiss();
+          }}
+        />
       </Modal>
 
       {/* Modal: Nuevo gasto */}
@@ -378,50 +428,77 @@ export default function BudgetPage() {
         onRequestClose={() => setShowExpenseModal(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Agregar gasto</Text>
+          <KeyboardAvoidingView
+            behavior={isIOS ? "padding" : undefined}
+            keyboardVerticalOffset={isIOS ? 12 : 0}
+          >
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Agregar gasto</Text>
 
-            <Text style={styles.label}>Nombre</Text>
-            <TextInput
-              value={expenseName}
-              onChangeText={setExpenseName}
-              placeholder="Ej: Arriendo"
-              style={styles.input}
-            />
+              <Text style={styles.label}>Nombre</Text>
+              <TextInput
+                value={expenseName}
+                onChangeText={setExpenseName}
+                placeholder="Ej: Arriendo"
+                style={styles.input}
+                returnKeyType="next"
+                blurOnSubmit
+              />
 
-            <Text style={[styles.label, { marginTop: 12 }]}>Monto</Text>
-            <TextInput
-              value={
-                Number(onlyDigits(expenseAmountRaw) || "0") > 0
-                  ? currency(Number(onlyDigits(expenseAmountRaw)))
-                  : ""
-              }
-              onChangeText={(t) => setExpenseAmountRaw(onlyDigits(t))}
-              placeholder="$ 0"
-              keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
-              style={styles.input}
-            />
+              <Text style={[styles.label, { marginTop: 12 }]}>Monto</Text>
+              <TextInput
+                ref={refExpenseAmount}
+                value={
+                  Number(onlyDigits(expenseAmountRaw) || "0") > 0
+                    ? currency(Number(onlyDigits(expenseAmountRaw)))
+                    : ""
+                }
+                onChangeText={(t) => setExpenseAmountRaw(onlyDigits(t))}
+                placeholder="$ 0"
+                keyboardType={isIOS ? "number-pad" : "numeric"}
+                style={styles.input}
+                inputAccessoryViewID={isIOS ? "acc-expense-amount" : undefined}
+              />
 
-            <Text style={[styles.label, { marginTop: 12 }]}>Día del mes (1–31)</Text>
-            <TextInput
-              value={expenseDayRaw}
-              onChangeText={(t) => setExpenseDayRaw(onlyDigits(t).slice(0, 2))}
-              placeholder="01"
-              keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
-              style={styles.input}
-              maxLength={2}
-            />
+              <Text style={[styles.label, { marginTop: 12 }]}>Día del mes (1–31)</Text>
+              <TextInput
+                ref={refExpenseDay}
+                value={expenseDayRaw}
+                onChangeText={(t) => setExpenseDayRaw(onlyDigits(t).slice(0, 2))}
+                placeholder="01"
+                keyboardType={isIOS ? "number-pad" : "numeric"}
+                style={styles.input}
+                maxLength={2}
+                inputAccessoryViewID={isIOS ? "acc-expense-day" : undefined}
+              />
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setShowExpenseModal(false)}>
-                <Text style={{ color: "#666" }}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleAddExpense}>
-                <Text style={{ color: PURPLE, fontWeight: "700" }}>Guardar</Text>
-              </TouchableOpacity>
+              <View style={styles.modalActions}>
+                <TouchableOpacity onPress={() => setShowExpenseModal(false)}>
+                  <Text style={{ color: "#666" }}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleAddExpense}>
+                  <Text style={{ color: PURPLE, fontWeight: "700" }}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
+
+        {/* Barras "Listo" iOS para Monto y Día */}
+        <DoneBar
+          nativeID="acc-expense-amount"
+          onDone={() => {
+            refExpenseAmount.current?.blur();
+            Keyboard.dismiss();
+          }}
+        />
+        <DoneBar
+          nativeID="acc-expense-day"
+          onDone={() => {
+            refExpenseDay.current?.blur();
+            Keyboard.dismiss();
+          }}
+        />
       </Modal>
     </View>
   );
@@ -463,5 +540,19 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     gap: 12,
     marginTop: 16,
+  },
+  accessoryBar: {
+    backgroundColor: "#F6F6F8",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: "#D1D5DB",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  accessoryBtn: {
+    color: PURPLE,
+    fontWeight: "700",
+    fontSize: 16,
   },
 });

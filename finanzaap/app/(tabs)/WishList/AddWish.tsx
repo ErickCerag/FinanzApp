@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,12 +7,19 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
+  InputAccessoryView,
+  Keyboard,
+  ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { ArrowLeft, Calendar } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { agregarDeseo, crearWishlistSiNoExiste } from "@/Service/wishList/wishlist.service";
+
+const PURPLE = "#6B21A8";
+const accessoryId = "add-deseo-accessory"; // barra nativa iOS para inputs (excepto monto)
 
 const currencyCLP = (n: number) =>
   new Intl.NumberFormat("es-CL", {
@@ -40,15 +47,34 @@ const isNative = Platform.OS === "ios" || Platform.OS === "android";
 
 export default function AddDeseo() {
   const router = useRouter();
-  const insets = useSafeAreaInsets(); // ✅ respeta notch / Dynamic Island
+  const insets = useSafeAreaInsets();
+
+  const nameRef = useRef<TextInput>(null);
+  const amountRef = useRef<TextInput>(null);
+  const descRef = useRef<TextInput>(null);
 
   const [name, setName] = useState("Computador nuevo");
   const [amountRaw, setAmountRaw] = useState("750000");
   const [deadline, setDeadline] = useState("2025-10-10");
   const [description, setDescription] = useState("Notebook HP i5 de Temu");
   const [saving, setSaving] = useState(false);
+
   const [showPicker, setShowPicker] = useState(false);
   const [dateObj, setDateObj] = useState(new Date(deadline));
+  const [iosTempDate, setIosTempDate] = useState(dateObj);
+
+  // === Estado para barra "Listo" propia (aparece cuando Monto está enfocado) ===
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [amountFocused, setAmountFocused] = useState(false);
+
+  useEffect(() => {
+    const sh = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
+    const hd = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    return () => {
+      sh.remove();
+      hd.remove();
+    };
+  }, []);
 
   const amountNumber = Number(digitsOnly(amountRaw) || "0");
   const amountFormatted = amountNumber > 0 ? currencyCLP(amountNumber) : "";
@@ -76,12 +102,10 @@ export default function AddDeseo() {
       Alert.alert("Faltan datos", "Nombre y monto son obligatorios.");
       return;
     }
-
     try {
       setSaving(true);
-      const usuarioId = 1; // 👤 Usuario temporal
+      const usuarioId = 1;
       const wishlistId = await crearWishlistSiNoExiste(usuarioId);
-
       await agregarDeseo(
         wishlistId,
         name.trim(),
@@ -89,7 +113,6 @@ export default function AddDeseo() {
         deadline?.trim() || null,
         description?.trim() || null
       );
-
       Alert.alert("✅ Éxito", "Deseo guardado correctamente.", [
         { text: "OK", onPress: () => router.back() },
       ]);
@@ -101,11 +124,12 @@ export default function AddDeseo() {
     }
   };
 
-  const onChangeDate = (_: any, selectedDate?: Date) => {
+  const onChangeDateAndroid = (_: any, selectedDate?: Date) => {
     setShowPicker(false);
     if (selectedDate) {
       setDateObj(selectedDate);
       setDeadline(selectedDate.toISOString().split("T")[0]);
+      setIosTempDate(selectedDate);
     }
   };
 
@@ -113,17 +137,26 @@ export default function AddDeseo() {
     const val = e?.target?.value as string;
     if (val) {
       setDeadline(val);
-      setDateObj(new Date(val));
+      const d = new Date(val);
+      setDateObj(d);
+      setIosTempDate(d);
     }
   };
 
+  // Mostrar barra propia cuando el campo monto está activo + teclado visible
+  const showOwnToolbar = amountFocused && keyboardVisible;
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      {/* Header con área segura */}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#fff" }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+    >
+      {/* Header */}
       <View
         style={{
-          backgroundColor: "#6B21A8",
-          paddingTop: insets.top + 10,   // ✅ baja el header debajo del notch
+          backgroundColor: PURPLE,
+          paddingTop: insets.top + 10,
           paddingHorizontal: 16,
           paddingBottom: 18,
           borderBottomLeftRadius: 12,
@@ -137,7 +170,7 @@ export default function AddDeseo() {
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <TouchableOpacity
             onPress={() => router.back()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} // ✅ mejor tactilidad
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={{
               padding: 4,
               borderRadius: 999,
@@ -152,56 +185,138 @@ export default function AddDeseo() {
         </View>
       </View>
 
-      {/* Form */}
-      <View style={{ padding: 18 }}>
-        <Text style={{ color: "#6B21A8", fontWeight: "700", marginBottom: 6 }}>Nombre</Text>
+      {/* Contenido */}
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 200 }}
+      >
+        {/* Nombre */}
+        <Text style={{ color: PURPLE, fontWeight: "700", marginBottom: 6 }}>Nombre</Text>
         <TextInput
+          ref={nameRef}
           placeholder="Ej. Bicicleta de ruta"
           value={name}
           onChangeText={setName}
           style={styles.input}
+          returnKeyType="next"
+          onSubmitEditing={() => amountRef.current?.focus()}
+          inputAccessoryViewID={Platform.OS === "ios" ? accessoryId : undefined}
         />
 
-        <Text style={{ color: "#6B21A8", fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
+        {/* Monto */}
+        <Text style={{ color: PURPLE, fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
           Monto requerido
         </Text>
         <TextInput
+          ref={amountRef}
           placeholder="$ 0"
-          keyboardType="numeric"
+          keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
           value={amountFormatted ? ` ${amountFormatted}` : ""}
           onChangeText={(t) => setAmountRaw(digitsOnly(t))}
           style={styles.input}
+          inputAccessoryViewID={Platform.OS === "ios" ? accessoryId : undefined}
+          onFocus={() => setAmountFocused(true)}
+          onBlur={() => setAmountFocused(false)}
         />
 
+        {/* Fecha */}
         <View style={{ flexDirection: "row", alignItems: "center", marginTop: 18, marginBottom: 6 }}>
-          <Text style={{ color: "#6B21A8", fontWeight: "700", flex: 1 }}>
-            Fecha límite (Opcional)
-          </Text>
-          <TouchableOpacity onPress={() => (isNative ? setShowPicker(true) : null)}>
-            <Calendar size={20} color="#6B21A8" />
+          <Text style={{ color: PURPLE, fontWeight: "700", flex: 1 }}>Fecha límite (Opcional)</Text>
+          <TouchableOpacity
+            onPress={() => {
+              if (isNative) {
+                setIosTempDate(dateObj);
+                setShowPicker(true);
+                Keyboard.dismiss();
+              }
+            }}
+          >
+            <Calendar size={20} color={PURPLE} />
           </TouchableOpacity>
         </View>
 
         {isNative ? (
           <>
-            <TouchableOpacity onPress={() => setShowPicker(true)}>
+            <TouchableOpacity
+              onPress={() => {
+                setIosTempDate(dateObj);
+                setShowPicker(true);
+                Keyboard.dismiss();
+              }}
+            >
               <TextInput
                 value={deadline}
                 editable={false}
                 style={[styles.input, { color: "#111" }]}
               />
             </TouchableOpacity>
-            {showPicker && (
+
+            {/* Android */}
+            {showPicker && Platform.OS === "android" && (
               <DateTimePicker
                 value={dateObj}
                 mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                onChange={onChangeDate}
+                display="default"
+                onChange={onChangeDateAndroid}
               />
+            )}
+
+            {/* iOS con botones Cancelar/Listo */}
+            {showPicker && Platform.OS === "ios" && (
+              <View
+                style={{
+                  marginTop: 8,
+                  borderRadius: 12,
+                  backgroundColor: "#fff",
+                  overflow: "hidden",
+                  borderWidth: 1,
+                  borderColor: "#e5e7eb",
+                }}
+              >
+                <DateTimePicker
+                  value={iosTempDate}
+                  mode="date"
+                  display="spinner"
+                  themeVariant="light"
+                  style={{ height: 216, backgroundColor: "#fff" }}
+                  onChange={(_e, d) => {
+                    if (d) setIosTempDate(d);
+                  }}
+                />
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "flex-end",
+                    padding: 8,
+                    gap: 16,
+                    borderTopWidth: 1,
+                    borderTopColor: "#e5e7eb",
+                    backgroundColor: "#fff",
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowPicker(false);
+                      setIosTempDate(dateObj);
+                    }}
+                  >
+                    <Text style={{ color: "#666" }}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowPicker(false);
+                      setDateObj(iosTempDate);
+                      setDeadline(iosTempDate.toISOString().split("T")[0]);
+                    }}
+                  >
+                    <Text style={{ color: PURPLE, fontWeight: "700" }}>Listo</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             )}
           </>
         ) : (
-          // 🌐 Web
+          // Web
           // @ts-ignore
           <input
             type="date"
@@ -223,7 +338,7 @@ export default function AddDeseo() {
         {/* Plan sugerido */}
         {monthsNeeded != null && monthlyAmount != null && (
           <View style={{ marginTop: 12 }}>
-            <Text style={{ fontSize: 12, color: "#6B21A8", fontWeight: "700" }}>
+            <Text style={{ fontSize: 12, color: PURPLE, fontWeight: "700" }}>
               Plan sugerido
             </Text>
             <Text style={{ marginTop: 4, color: "#111" }}>
@@ -235,18 +350,24 @@ export default function AddDeseo() {
           </View>
         )}
 
-        <Text style={{ color: "#6B21A8", fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
+        {/* Descripción */}
+        <Text style={{ color: PURPLE, fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
           Descripción (Opcional)
         </Text>
         <TextInput
+          ref={descRef}
           placeholder="Notas del deseo…"
           value={description}
           onChangeText={setDescription}
-          style={[styles.input, { height: 80, textAlignVertical: "top" }]}
+          style={[styles.input, { height: 100, textAlignVertical: "top" }]}
           multiline
-          numberOfLines={4}
+          returnKeyType="done"
+          blurOnSubmit
+          onSubmitEditing={() => Keyboard.dismiss()}
+          inputAccessoryViewID={Platform.OS === "ios" ? accessoryId : undefined}
         />
 
+        {/* Botón Guardar */}
         <TouchableOpacity
           onPress={handleSave}
           disabled={!isValid || saving}
@@ -258,8 +379,65 @@ export default function AddDeseo() {
             <Text style={{ color: "#fff", fontWeight: "700" }}>Guardar deseo</Text>
           )}
         </TouchableOpacity>
-      </View>
-    </View>
+      </ScrollView>
+
+      {/* Barra nativa iOS para inputs (Nombre/Descripción) */}
+      {Platform.OS === "ios" && (
+        <InputAccessoryView nativeID={accessoryId}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "flex-end",
+              padding: 10,
+              backgroundColor: "#F8F8F8",
+              borderTopWidth: 1,
+              borderColor: "#e5e7eb",
+            }}
+          >
+            <TouchableOpacity onPress={() => Keyboard.dismiss()}>
+              <Text style={{ color: PURPLE, fontWeight: "700" }}>Listo</Text>
+            </TouchableOpacity>
+          </View>
+        </InputAccessoryView>
+      )}
+
+      {/* ✅ Barra propia “Cancelar / Listo” para MONTO (numérico) – iOS & Android */}
+      {showOwnToolbar && (
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: insets.bottom,
+            backgroundColor: "#F8F8F8",
+            borderTopWidth: 1,
+            borderColor: "#e5e7eb",
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            flexDirection: "row",
+            justifyContent: "flex-end",
+            gap: 16,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => {
+              amountRef.current?.blur();
+              Keyboard.dismiss();
+            }}
+          >
+            <Text style={{ color: "#666" }}>Cancelar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              amountRef.current?.blur();
+              Keyboard.dismiss();
+            }}
+          >
+            <Text style={{ color: PURPLE, fontWeight: "700" }}>Listo</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </KeyboardAvoidingView>
   );
 }
 
@@ -273,11 +451,11 @@ const styles = {
   } as const,
   button: {
     marginTop: 24,
-    backgroundColor: "#6B21A8",
+    backgroundColor: PURPLE,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
-    shadowColor: "#6B21A8",
+    shadowColor: PURPLE,
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 2,
