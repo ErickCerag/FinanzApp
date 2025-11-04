@@ -16,7 +16,10 @@ import {
   TrendingUp,
   PieChart,
   BarChart3,
-} from "lucide-react";
+} from "lucide-react"; // ✅ correcto para web
+
+// ... tu código igual que antes
+
 
 // ==== ESTILOS Y HELPERS ====
 const PURPLE = "#6B21A8";
@@ -169,7 +172,7 @@ export default function BalancePage() {
           <Text
             style={{
               color: "#fff",
-              fontSize: 30,
+              fontSize: 25,
               fontWeight: "700",
               marginLeft: 12,
             }}

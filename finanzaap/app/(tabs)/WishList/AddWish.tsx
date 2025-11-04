@@ -11,8 +11,8 @@ import {
 import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { ArrowLeft, Calendar } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { agregarDeseo, crearWishlistSiNoExiste } from "@/Service/wishList/wishlist.service";
-
 
 const currencyCLP = (n: number) =>
   new Intl.NumberFormat("es-CL", {
@@ -40,6 +40,8 @@ const isNative = Platform.OS === "ios" || Platform.OS === "android";
 
 export default function AddDeseo() {
   const router = useRouter();
+  const insets = useSafeAreaInsets(); // ✅ respeta notch / Dynamic Island
+
   const [name, setName] = useState("Computador nuevo");
   const [amountRaw, setAmountRaw] = useState("750000");
   const [deadline, setDeadline] = useState("2025-10-10");
@@ -117,22 +119,34 @@ export default function AddDeseo() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      {/* Header */}
+      {/* Header con área segura */}
       <View
         style={{
           backgroundColor: "#6B21A8",
+          paddingTop: insets.top + 10,   // ✅ baja el header debajo del notch
           paddingHorizontal: 16,
-          paddingVertical: 18,
+          paddingBottom: 18,
           borderBottomLeftRadius: 12,
           borderBottomRightRadius: 12,
           elevation: 2,
+          shadowColor: "#000",
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
-            <ArrowLeft color="#fff" size={40} />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} // ✅ mejor tactilidad
+            style={{
+              padding: 4,
+              borderRadius: 999,
+              backgroundColor: "rgba(255,255,255,0.1)",
+            }}
+          >
+            <ArrowLeft color="#fff" size={28} />
           </TouchableOpacity>
-          <Text style={{ color: "#fff", fontSize: 30, fontWeight: "700", marginLeft: 12 }}>
+          <Text style={{ color: "#fff", fontSize: 25, fontWeight: "700", marginLeft: 12 }}>
             Registrar nuevo deseo
           </Text>
         </View>
@@ -141,7 +155,12 @@ export default function AddDeseo() {
       {/* Form */}
       <View style={{ padding: 18 }}>
         <Text style={{ color: "#6B21A8", fontWeight: "700", marginBottom: 6 }}>Nombre</Text>
-        <TextInput placeholder="Ej. Bicicleta de ruta" value={name} onChangeText={setName} style={styles.input} />
+        <TextInput
+          placeholder="Ej. Bicicleta de ruta"
+          value={name}
+          onChangeText={setName}
+          style={styles.input}
+        />
 
         <Text style={{ color: "#6B21A8", fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
           Monto requerido
@@ -155,7 +174,9 @@ export default function AddDeseo() {
         />
 
         <View style={{ flexDirection: "row", alignItems: "center", marginTop: 18, marginBottom: 6 }}>
-          <Text style={{ color: "#6B21A8", fontWeight: "700", flex: 1 }}>Fecha límite (Opcional)</Text>
+          <Text style={{ color: "#6B21A8", fontWeight: "700", flex: 1 }}>
+            Fecha límite (Opcional)
+          </Text>
           <TouchableOpacity onPress={() => (isNative ? setShowPicker(true) : null)}>
             <Calendar size={20} color="#6B21A8" />
           </TouchableOpacity>
@@ -164,7 +185,11 @@ export default function AddDeseo() {
         {isNative ? (
           <>
             <TouchableOpacity onPress={() => setShowPicker(true)}>
-              <TextInput value={deadline} editable={false} style={[styles.input, { color: "#111" }]} />
+              <TextInput
+                value={deadline}
+                editable={false}
+                style={[styles.input, { color: "#111" }]}
+              />
             </TouchableOpacity>
             {showPicker && (
               <DateTimePicker
@@ -198,10 +223,13 @@ export default function AddDeseo() {
         {/* Plan sugerido */}
         {monthsNeeded != null && monthlyAmount != null && (
           <View style={{ marginTop: 12 }}>
-            <Text style={{ fontSize: 12, color: "#6B21A8", fontWeight: "700" }}>Plan sugerido</Text>
+            <Text style={{ fontSize: 12, color: "#6B21A8", fontWeight: "700" }}>
+              Plan sugerido
+            </Text>
             <Text style={{ marginTop: 4, color: "#111" }}>
               Debes ahorrar {currencyCLP(monthlyAmount)} al mes durante {monthsNeeded}{" "}
-              {monthsNeeded === 1 ? "mes" : "meses"} para llegar a {currencyCLP(amountNumber)} el {deadline || "-"}.
+              {monthsNeeded === 1 ? "mes" : "meses"} para llegar a {currencyCLP(amountNumber)} el{" "}
+              {deadline || "-"}.
             </Text>
             {!!warning && <Text style={{ marginTop: 4, color: "#b45309" }}>{warning}</Text>}
           </View>
@@ -224,7 +252,11 @@ export default function AddDeseo() {
           disabled={!isValid || saving}
           style={[styles.button, { opacity: !isValid || saving ? 0.6 : 1 }]}
         >
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700" }}>Guardar deseo</Text>}
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={{ color: "#fff", fontWeight: "700" }}>Guardar deseo</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>

@@ -38,20 +38,20 @@ export default function BottomNav({ active }: Props) {
         </TouchableOpacity>
       </Link>
 
-      <Link href={"/WishList/wishlist" as Href} asChild>
+      <Link href={"/(tabs)/WishList/wishlist" as Href} asChild>
         <TouchableOpacity style={styles.item}>
           <Ionicons name="star" size={22} color={color("wishlist")} />
           <Text style={labelStyle("wishlist")} numberOfLines={1}>WishList</Text>
         </TouchableOpacity>
       </Link>
 
-      {/* Si tu archivo aún es Balanace.tsx, usa "/balanace" mientras lo renombras */}
-      <Link href={"/Balanace" as Href} asChild>
-        <TouchableOpacity style={styles.item}>
-          <Ionicons name="stats-chart" size={22} color={color("balance")} />
-          <Text style={labelStyle("balance")} numberOfLines={1}>Balance</Text>
-        </TouchableOpacity>
-      </Link>
+      <Link href="/(tabs)/Balance" asChild>
+  <TouchableOpacity style={styles.item}>
+    <Ionicons name="stats-chart" size={22} color={color("balance")} />
+    <Text style={labelStyle("balance")}>Balance</Text>
+  </TouchableOpacity>
+</Link>
+
 
       <Link href={"/Perfil" as Href} asChild>
         <TouchableOpacity style={styles.item}>
