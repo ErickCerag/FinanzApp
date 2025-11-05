@@ -2,7 +2,7 @@
 import type { WishlistRow, WishlistItemRow } from "./wishlist.service";
 
 type Item = {
-  id: string;
+  idDetalle: number;               // ← ID consistente con RN
   nombre: string;
   monto: number;
   fechaLimite?: string | null;
@@ -19,6 +19,10 @@ function load(): DB {
   catch { return {}; }
 }
 function save(db: DB) { localStorage.setItem(KEY, JSON.stringify(db)); }
+
+function recalc(bucket: Bucket) {
+  bucket.total = bucket.items.reduce((a, b) => a + (b.monto || 0), 0);
+}
 
 export async function crearWishlistSiNoExiste(idUsuario: number): Promise<number> {
   const db = load();
@@ -40,17 +44,17 @@ export async function agregarDeseo(
   const k = String(idWishlist);
   if (!db[k]) db[k] = { items: [], total: 0 };
 
-  const id = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
+  const idDetalle = Date.now(); // Suficiente para demo (único)
   db[k].items.unshift({
-    id,
+    idDetalle,
     nombre,
     monto: Number(monto) || 0,
     fechaLimite: fechaLimite ?? null,
     descripcion: descripcion ?? null,
   });
-  db[k].total = db[k].items.reduce((a, b) => a + (b.monto || 0), 0);
+  recalc(db[k]);
   save(db);
-  return Date.now();
+  return idDetalle;
 }
 
 export async function obtenerWishlistConItems(
@@ -62,7 +66,7 @@ export async function obtenerWishlistConItems(
 
   const wl: WishlistRow = { id_wishlist: idUsuario, Total: bucket.total };
   const items: WishlistItemRow[] = bucket.items.map((x) => ({
-    id_wishlistDetalle: Number.NaN,       // no aplica en Web
+    id_wishlistDetalle: x.idDetalle,
     Nombre: x.nombre,
     Monto: x.monto,
     FechaLimite: x.fechaLimite ?? null,
@@ -70,4 +74,47 @@ export async function obtenerWishlistConItems(
   }));
 
   return { wishlist: wl, items };
+}
+
+/** NUEVO: actualizar (web) */
+export async function actualizarDeseo(
+  idWishlistDetalle: number,
+  nombre: string,
+  monto: number,
+  fechaLimite?: string | null,
+  descripcion?: string | null
+): Promise<void> {
+  const db = load();
+  // Recorre todas las "listas" (por simplicidad)
+  for (const k of Object.keys(db)) {
+    const bucket = db[k];
+    const idx = bucket.items.findIndex(i => i.idDetalle === idWishlistDetalle);
+    if (idx >= 0) {
+      bucket.items[idx] = {
+        ...bucket.items[idx],
+        nombre,
+        monto: Number(monto) || 0,
+        fechaLimite: fechaLimite ?? null,
+        descripcion: descripcion ?? null,
+      };
+      recalc(bucket);
+      save(db);
+      return;
+    }
+  }
+}
+
+/** NUEVO: eliminar (web) */
+export async function eliminarDeseo(idWishlistDetalle: number): Promise<void> {
+  const db = load();
+  for (const k of Object.keys(db)) {
+    const bucket = db[k];
+    const lenBefore = bucket.items.length;
+    bucket.items = bucket.items.filter(i => i.idDetalle !== idWishlistDetalle);
+    if (bucket.items.length !== lenBefore) {
+      recalc(bucket);
+      save(db);
+      return;
+    }
+  }
 }

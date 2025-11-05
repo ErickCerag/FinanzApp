@@ -31,18 +31,13 @@ export async function crearWishlistSiNoExiste(idUsuario: number): Promise<number
   const db: any = await getDb();
   const uid = Number(idUsuario);
 
-  // ¿Existe una wishlist del usuario?
   const row = await db.getFirstAsync?.(
     `SELECT id_wishlist FROM Wishlist WHERE id_usuario = ? LIMIT 1;`,
     [uid]
   );
-
   if (row?.id_wishlist) return row.id_wishlist as number;
 
-  await db.runAsync?.(
-    `INSERT INTO Wishlist (id_usuario, Total) VALUES (?, 0);`,
-    [uid]
-  );
+  await db.runAsync?.(`INSERT INTO Wishlist (id_usuario, Total) VALUES (?, 0);`, [uid]);
 
   const created = await db.getFirstAsync?.(
     `SELECT id_wishlist FROM Wishlist WHERE id_usuario = ? LIMIT 1;`,
@@ -71,9 +66,7 @@ export async function agregarDeseo(
 
     await db.runAsync?.(
       `UPDATE Wishlist
-         SET Total = COALESCE((
-           SELECT SUM(Monto) FROM WishListDetalle WHERE id_wishlist = ?
-         ), 0)
+         SET Total = COALESCE((SELECT SUM(Monto) FROM WishListDetalle WHERE id_wishlist = ?), 0)
        WHERE id_wishlist = ?;`,
       [idWishlist, idWishlist]
     );
@@ -98,7 +91,6 @@ export async function obtenerWishlistConItems(
     `SELECT id_wishlist, Total FROM Wishlist WHERE id_usuario = ? LIMIT 1;`,
     [uid]
   );
-
   if (!wl) return { wishlist: null, items: [] };
 
   const items = await db.getAllAsync?.(
@@ -113,4 +105,84 @@ export async function obtenerWishlistConItems(
     wishlist: wl as WishlistRow,
     items: (items ?? []) as WishlistItemRow[],
   };
+}
+
+/** NUEVO: actualizar */
+export async function actualizarDeseo(
+  idWishlistDetalle: number,
+  nombre: string,
+  monto: number,
+  fechaLimite?: string | null,
+  descripcion?: string | null
+): Promise<void> {
+  await ensureSchema();
+  const db: any = await getDb();
+
+  // Obtiene id_wishlist para recalcular total
+  const row = await db.getFirstAsync?.(
+    `SELECT id_wishlist FROM WishListDetalle WHERE id_wishlistDetalle = ?;`,
+    [idWishlistDetalle]
+  );
+  if (!row?.id_wishlist) return;
+
+  const idWishlist = row.id_wishlist;
+
+  await db.execAsync?.("BEGIN TRANSACTION;");
+  try {
+    await db.runAsync?.(
+      `UPDATE WishListDetalle
+         SET Nombre = ?, Monto = ?, FechaLimite = ?, Descripcion = ?
+       WHERE id_wishlistDetalle = ?;`,
+      [nombre, Number(monto) || 0, fechaLimite ?? null, descripcion ?? null, idWishlistDetalle]
+    );
+
+    await db.runAsync?.(
+      `UPDATE Wishlist
+         SET Total = COALESCE((SELECT SUM(Monto) FROM WishListDetalle WHERE id_wishlist = ?), 0)
+       WHERE id_wishlist = ?;`,
+      [idWishlist, idWishlist]
+    );
+
+    await db.execAsync?.("COMMIT;");
+  } catch (err) {
+    await db.execAsync?.("ROLLBACK;");
+    console.error("❌ [Wishlist-Native] actualizarDeseo:", err);
+    throw err;
+  }
+}
+
+/** NUEVO: eliminar */
+export async function eliminarDeseo(idWishlistDetalle: number): Promise<void> {
+  await ensureSchema();
+  const db: any = await getDb();
+
+  // Obtiene id_wishlist para recalcular total
+  const row = await db.getFirstAsync?.(
+    `SELECT id_wishlist FROM WishListDetalle WHERE id_wishlistDetalle = ?;`,
+    [idWishlistDetalle]
+  );
+  if (!row?.id_wishlist) return;
+
+  const idWishlist = row.id_wishlist;
+
+  await db.execAsync?.("BEGIN TRANSACTION;");
+  try {
+    await db.runAsync?.(
+      `DELETE FROM WishListDetalle WHERE id_wishlistDetalle = ?;`,
+      [idWishlistDetalle]
+    );
+
+    await db.runAsync?.(
+      `UPDATE Wishlist
+         SET Total = COALESCE((SELECT SUM(Monto) FROM WishListDetalle WHERE id_wishlist = ?), 0)
+       WHERE id_wishlist = ?;`,
+      [idWishlist, idWishlist]
+    );
+
+    await db.execAsync?.("COMMIT;");
+  } catch (err) {
+    await db.execAsync?.("ROLLBACK;");
+    console.error("❌ [Wishlist-Native] eliminarDeseo:", err);
+    throw err;
+  }
 }

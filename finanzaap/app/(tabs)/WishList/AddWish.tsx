@@ -1,158 +1,124 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useMemo } from "react";
 import {
   View,
   Text,
-  TextInput,
+  ScrollView,
   TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  Platform,
+  TextInput,
   KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
   InputAccessoryView,
   Keyboard,
-  ScrollView,
+  Modal,
+  Alert,
 } from "react-native";
-import { useRouter } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { ArrowLeft, Calendar } from "lucide-react-native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { agregarDeseo, crearWishlistSiNoExiste } from "@/Service/wishList/wishlist.service";
+import { ArrowLeft, Calendar } from "lucide-react-native";
+import {
+  crearWishlistSiNoExiste,
+  agregarDeseo,
+} from "@/Service/wishList/wishlist.service";
 
 const PURPLE = "#6B21A8";
-const accessoryId = "add-deseo-accessory"; // barra nativa iOS para inputs (excepto monto)
+const GRAY_BORDER = "#E5E7EB";
+const isIOS = Platform.OS === "ios";
+const isWeb = Platform.OS === "web";
 
-const currencyCLP = (n: number) =>
+const onlyDigits = (s: string) => s.replace(/\D+/g, "");
+const currency = (v: number) =>
   new Intl.NumberFormat("es-CL", {
     style: "currency",
     currency: "CLP",
     maximumFractionDigits: 0,
-  }).format(n);
+  }).format(v);
 
-const digitsOnly = (s: string) => s.replace(/\D+/g, "");
-
-function diffMonthsInclusive(start: Date, end: Date) {
-  if (end <= start) return 1;
-  const y1 = start.getFullYear();
-  const m1 = start.getMonth();
-  const d1 = start.getDate();
-  const y2 = end.getFullYear();
-  const m2 = end.getMonth();
-  const d2 = end.getDate();
-  let months = (y2 - y1) * 12 + (m2 - m1);
-  if (d2 > d1) months += 1;
-  return Math.max(1, months);
+function DoneBar({ nativeID, onDone }: { nativeID: string; onDone: () => void }) {
+  if (!isIOS) return null;
+  return (
+    <InputAccessoryView nativeID={nativeID}>
+      <View style={styles.accessoryBar}>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity onPress={onDone}>
+          <Text style={styles.accessoryBtn}>Listo</Text>
+        </TouchableOpacity>
+      </View>
+    </InputAccessoryView>
+  );
 }
 
-const isNative = Platform.OS === "ios" || Platform.OS === "android";
-
-export default function AddDeseo() {
+export default function AddWish() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const usuarioId = 1;
 
-  const nameRef = useRef<TextInput>(null);
-  const amountRef = useRef<TextInput>(null);
-  const descRef = useRef<TextInput>(null);
-
-  const [name, setName] = useState("Computador nuevo");
-  const [amountRaw, setAmountRaw] = useState("750000");
-  const [deadline, setDeadline] = useState("2025-10-10");
-  const [description, setDescription] = useState("Notebook HP i5 de Temu");
-  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState("");
+  const [amountRaw, setAmountRaw] = useState("");
+  const [fecha, setFecha] = useState<Date | null>(null);
+  const [descripcion, setDescripcion] = useState("");
 
   const [showPicker, setShowPicker] = useState(false);
-  const [dateObj, setDateObj] = useState(new Date(deadline));
-  const [iosTempDate, setIosTempDate] = useState(dateObj);
 
-  // === Estado para barra "Listo" propia (aparece cuando Monto está enfocado) ===
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [amountFocused, setAmountFocused] = useState(false);
+  const refMonto = useRef<TextInput>(null);
+  const refDesc = useRef<TextInput>(null);
 
-  useEffect(() => {
-    const sh = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
-    const hd = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
-    return () => {
-      sh.remove();
-      hd.remove();
-    };
-  }, []);
-
-  const amountNumber = Number(digitsOnly(amountRaw) || "0");
-  const amountFormatted = amountNumber > 0 ? currencyCLP(amountNumber) : "";
-  const isValid = name.trim().length > 0 && amountNumber > 0;
-
-  const { monthsNeeded, monthlyAmount, warning } = useMemo(() => {
-    try {
-      const today = new Date();
-      const end = deadline ? new Date(deadline) : null;
-      if (!end) return { monthsNeeded: null, monthlyAmount: null, warning: "" };
-
-      const months = diffMonthsInclusive(today, end);
-      const perMonth = amountNumber > 0 ? Math.ceil(amountNumber / months) : 0;
-      let warn = "";
-      if (end <= today)
-        warn = "La fecha debe ser posterior a hoy; se considera 1 mes para el cálculo.";
-      return { monthsNeeded: months, monthlyAmount: perMonth, warning: warn };
-    } catch {
-      return { monthsNeeded: null, monthlyAmount: null, warning: "" };
-    }
-  }, [amountNumber, deadline]);
-
-  const handleSave = async () => {
-    if (!isValid) {
-      Alert.alert("Faltan datos", "Nombre y monto son obligatorios.");
+  /* === Guardar deseo === */
+  const onSave = async () => {
+    const monto = Number(onlyDigits(amountRaw) || "0");
+    const nombre = name.trim();
+    if (!nombre || monto <= 0) {
+      Alert.alert("Completa los datos", "Nombre y monto son obligatorios.");
       return;
     }
+
     try {
-      setSaving(true);
-      const usuarioId = 1;
-      const wishlistId = await crearWishlistSiNoExiste(usuarioId);
-      await agregarDeseo(
-        wishlistId,
-        name.trim(),
-        amountNumber,
-        deadline?.trim() || null,
-        description?.trim() || null
-      );
-      Alert.alert("✅ Éxito", "Deseo guardado correctamente.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
-    } catch (error) {
-      console.error("❌ Error al guardar el deseo:", error);
+      const idWishlist = await crearWishlistSiNoExiste(usuarioId);
+      const fechaStr = fecha ? fecha.toISOString().slice(0, 10) : null;
+      await agregarDeseo(idWishlist, nombre, monto, fechaStr, descripcion.trim() || null);
+      Alert.alert("Listo", "Deseo agregado correctamente.");
+      router.back();
+    } catch (e) {
+      console.error(e);
       Alert.alert("Error", "No se pudo guardar el deseo.");
-    } finally {
-      setSaving(false);
     }
   };
 
-  const onChangeDateAndroid = (_: any, selectedDate?: Date) => {
-    setShowPicker(false);
-    if (selectedDate) {
-      setDateObj(selectedDate);
-      setDeadline(selectedDate.toISOString().split("T")[0]);
-      setIosTempDate(selectedDate);
-    }
+  /* === Formato de fecha dd-MM-yyyy === */
+  const formatFecha = (d?: Date | null) => {
+    if (!d) return "";
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
   };
 
-  const onChangeWebDate = (e: any) => {
-    const val = e?.target?.value as string;
-    if (val) {
-      setDeadline(val);
-      const d = new Date(val);
-      setDateObj(d);
-      setIosTempDate(d);
-    }
-  };
+  /* === Cálculo del plan sugerido === */
+  const planSugerido = useMemo(() => {
+    const monto = Number(onlyDigits(amountRaw) || "0");
+    if (!fecha || monto <= 0) return null;
 
-  // Mostrar barra propia cuando el campo monto está activo + teclado visible
-  const showOwnToolbar = amountFocused && keyboardVisible;
+    const hoy = new Date();
+    const diffMeses =
+      fecha.getFullYear() * 12 +
+      fecha.getMonth() -
+      (hoy.getFullYear() * 12 + hoy.getMonth());
+    const meses = diffMeses > 0 ? diffMeses : 1; // mínimo 1 mes
+    const ahorroMensual = monto / meses;
+
+    return {
+      meses,
+      ahorroMensual,
+      texto: `Debes ahorrar ${currency(ahorroMensual)} al mes durante ${meses} mes${
+        meses > 1 ? "es" : ""
+      } para alcanzar tu meta.`,
+    };
+  }, [amountRaw, fecha]);
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#fff" }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
-    >
-      {/* Header */}
+    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+      {/* HEADER */}
       <View
         style={{
           backgroundColor: PURPLE,
@@ -161,303 +127,271 @@ export default function AddDeseo() {
           paddingBottom: 18,
           borderBottomLeftRadius: 12,
           borderBottomRightRadius: 12,
-          elevation: 2,
           shadowColor: "#000",
           shadowOpacity: 0.15,
           shadowRadius: 8,
+          elevation: 2,
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <TouchableOpacity
             onPress={() => router.back()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={{
               padding: 4,
               borderRadius: 999,
               backgroundColor: "rgba(255,255,255,0.1)",
             }}
           >
-            <ArrowLeft color="#fff" size={28} />
+            <ArrowLeft color="#fff" size={24} />
           </TouchableOpacity>
-          <Text style={{ color: "#fff", fontSize: 25, fontWeight: "700", marginLeft: 12 }}>
+          <Text
+            style={{
+              color: "#fff",
+              fontSize: 24,
+              fontWeight: "800",
+              marginLeft: 12,
+            }}
+          >
             Registrar nuevo deseo
           </Text>
         </View>
       </View>
 
-      {/* Contenido */}
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 18, paddingBottom: insets.bottom + 200 }}
+      {/* CONTENIDO */}
+      <KeyboardAvoidingView
+        behavior={isIOS ? "padding" : "height"}
+        keyboardVerticalOffset={isIOS ? insets.top + 12 : 0}
+        style={{ flex: 1 }}
       >
-        {/* Nombre */}
-        <Text style={{ color: PURPLE, fontWeight: "700", marginBottom: 6 }}>Nombre</Text>
-        <TextInput
-          ref={nameRef}
-          placeholder="Ej. Bicicleta de ruta"
-          value={name}
-          onChangeText={setName}
-          style={styles.input}
-          returnKeyType="next"
-          onSubmitEditing={() => amountRef.current?.focus()}
-          inputAccessoryViewID={Platform.OS === "ios" ? accessoryId : undefined}
-        />
-
-        {/* Monto */}
-        <Text style={{ color: PURPLE, fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
-          Monto requerido
-        </Text>
-        <TextInput
-          ref={amountRef}
-          placeholder="$ 0"
-          keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
-          value={amountFormatted ? ` ${amountFormatted}` : ""}
-          onChangeText={(t) => setAmountRaw(digitsOnly(t))}
-          style={styles.input}
-          inputAccessoryViewID={Platform.OS === "ios" ? accessoryId : undefined}
-          onFocus={() => setAmountFocused(true)}
-          onBlur={() => setAmountFocused(false)}
-        />
-
-        {/* Fecha */}
-        <View style={{ flexDirection: "row", alignItems: "center", marginTop: 18, marginBottom: 6 }}>
-          <Text style={{ color: PURPLE, fontWeight: "700", flex: 1 }}>Fecha límite (Opcional)</Text>
-          <TouchableOpacity
-            onPress={() => {
-              if (isNative) {
-                setIosTempDate(dateObj);
-                setShowPicker(true);
-                Keyboard.dismiss();
-              }
-            }}
-          >
-            <Calendar size={20} color={PURPLE} />
-          </TouchableOpacity>
-        </View>
-
-        {isNative ? (
-          <>
-            <TouchableOpacity
-              onPress={() => {
-                setIosTempDate(dateObj);
-                setShowPicker(true);
-                Keyboard.dismiss();
-              }}
-            >
-              <TextInput
-                value={deadline}
-                editable={false}
-                style={[styles.input, { color: "#111" }]}
-              />
-            </TouchableOpacity>
-
-            {/* Android */}
-            {showPicker && Platform.OS === "android" && (
-              <DateTimePicker
-                value={dateObj}
-                mode="date"
-                display="default"
-                onChange={onChangeDateAndroid}
-              />
-            )}
-
-            {/* iOS con botones Cancelar/Listo */}
-            {showPicker && Platform.OS === "ios" && (
-              <View
-                style={{
-                  marginTop: 8,
-                  borderRadius: 12,
-                  backgroundColor: "#fff",
-                  overflow: "hidden",
-                  borderWidth: 1,
-                  borderColor: "#e5e7eb",
-                }}
-              >
-                <DateTimePicker
-                  value={iosTempDate}
-                  mode="date"
-                  display="spinner"
-                  themeVariant="light"
-                  style={{ height: 216, backgroundColor: "#fff" }}
-                  onChange={(_e, d) => {
-                    if (d) setIosTempDate(d);
-                  }}
-                />
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "flex-end",
-                    padding: 8,
-                    gap: 16,
-                    borderTopWidth: 1,
-                    borderTopColor: "#e5e7eb",
-                    backgroundColor: "#fff",
-                  }}
-                >
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShowPicker(false);
-                      setIosTempDate(dateObj);
-                    }}
-                  >
-                    <Text style={{ color: "#666" }}>Cancelar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShowPicker(false);
-                      setDateObj(iosTempDate);
-                      setDeadline(iosTempDate.toISOString().split("T")[0]);
-                    }}
-                  >
-                    <Text style={{ color: PURPLE, fontWeight: "700" }}>Listo</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </>
-        ) : (
-          // Web
-          // @ts-ignore
-          <input
-            type="date"
-            value={deadline}
-            onChange={onChangeWebDate}
-            style={{
-              width: "100%",
-              padding: "10px 0",
-              border: "none",
-              borderBottom: "1px solid #e5e7eb",
-              fontSize: 16,
-              color: "#111827",
-              outline: "none",
-              background: "transparent",
-            }}
-          />
-        )}
-
-        {/* Plan sugerido */}
-        {monthsNeeded != null && monthlyAmount != null && (
-          <View style={{ marginTop: 12 }}>
-            <Text style={{ fontSize: 12, color: PURPLE, fontWeight: "700" }}>
-              Plan sugerido
-            </Text>
-            <Text style={{ marginTop: 4, color: "#111" }}>
-              Debes ahorrar {currencyCLP(monthlyAmount)} al mes durante {monthsNeeded}{" "}
-              {monthsNeeded === 1 ? "mes" : "meses"} para llegar a {currencyCLP(amountNumber)} el{" "}
-              {deadline || "-"}.
-            </Text>
-            {!!warning && <Text style={{ marginTop: 4, color: "#b45309" }}>{warning}</Text>}
-          </View>
-        )}
-
-        {/* Descripción */}
-        <Text style={{ color: PURPLE, fontWeight: "700", marginTop: 18, marginBottom: 6 }}>
-          Descripción (Opcional)
-        </Text>
-        <TextInput
-          ref={descRef}
-          placeholder="Notas del deseo…"
-          value={description}
-          onChangeText={setDescription}
-          style={[styles.input, { height: 100, textAlignVertical: "top" }]}
-          multiline
-          returnKeyType="done"
-          blurOnSubmit
-          onSubmitEditing={() => Keyboard.dismiss()}
-          inputAccessoryViewID={Platform.OS === "ios" ? accessoryId : undefined}
-        />
-
-        {/* Botón Guardar */}
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={!isValid || saving}
-          style={[styles.button, { opacity: !isValid || saving ? 0.6 : 1 }]}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ color: "#fff", fontWeight: "700" }}>Guardar deseo</Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-
-      {/* Barra nativa iOS para inputs (Nombre/Descripción) */}
-      {Platform.OS === "ios" && (
-        <InputAccessoryView nativeID={accessoryId}>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "flex-end",
-              padding: 10,
-              backgroundColor: "#F8F8F8",
-              borderTopWidth: 1,
-              borderColor: "#e5e7eb",
-            }}
-          >
-            <TouchableOpacity onPress={() => Keyboard.dismiss()}>
-              <Text style={{ color: PURPLE, fontWeight: "700" }}>Listo</Text>
-            </TouchableOpacity>
-          </View>
-        </InputAccessoryView>
-      )}
-
-      {/* ✅ Barra propia “Cancelar / Listo” para MONTO (numérico) – iOS & Android */}
-      {showOwnToolbar && (
-        <View
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: insets.bottom,
-            backgroundColor: "#F8F8F8",
-            borderTopWidth: 1,
-            borderColor: "#e5e7eb",
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            flexDirection: "row",
-            justifyContent: "flex-end",
-            gap: 16,
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: (insets.bottom || 0) + 40,
           }}
         >
-          <TouchableOpacity
-            onPress={() => {
-              amountRef.current?.blur();
-              Keyboard.dismiss();
-            }}
-          >
-            <Text style={{ color: "#666" }}>Cancelar</Text>
+          {/* NOMBRE */}
+          <Text style={styles.label}>Nombre</Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Ej: Computador nuevo"
+            style={styles.input}
+            returnKeyType="next"
+          />
+
+          {/* MONTO */}
+          <Text style={[styles.label, { marginTop: 16 }]}>Monto requerido</Text>
+          <TextInput
+            ref={refMonto}
+            value={
+              Number(onlyDigits(amountRaw) || "0") > 0
+                ? currency(Number(onlyDigits(amountRaw)))
+                : ""
+            }
+            onChangeText={(t) => setAmountRaw(onlyDigits(t))}
+            placeholder="$ 0"
+            keyboardType={isIOS ? "number-pad" : "numeric"}
+            style={styles.input}
+            inputAccessoryViewID={isIOS ? "acc-addwish" : undefined}
+          />
+
+          {/* FECHA LÍMITE */}
+          <Text style={[styles.label, { marginTop: 16 }]}>Fecha límite (Opcional)</Text>
+
+          {isWeb ? (
+            <input
+              type="date"
+              value={fecha ? fecha.toISOString().slice(0, 10) : ""}
+              onChange={(e) => setFecha(new Date(e.target.value))}
+              style={{
+                width: "100%",
+                padding: "10px",
+                fontSize: 16,
+                borderWidth: 1,
+                borderColor: GRAY_BORDER,
+                borderRadius: 8,
+              }}
+            />
+          ) : (
+            <>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <TextInput
+                  value={formatFecha(fecha)}
+                  editable={false}
+                  placeholder="dd-mm-aaaa"
+                  style={[styles.input, { flex: 1 }]}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPicker(true)}
+                  style={{ padding: 8, marginLeft: 8 }}
+                >
+                  <Calendar size={20} color={PURPLE} />
+                </TouchableOpacity>
+              </View>
+
+              {showPicker && (
+                <Modal transparent animationType="slide">
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: "rgba(0,0,0,0.4)",
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    <View
+                      style={{
+                        backgroundColor: "#fff",
+                        borderTopLeftRadius: 16,
+                        borderTopRightRadius: 16,
+                        padding: 16,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <TouchableOpacity onPress={() => setShowPicker(false)}>
+                          <Text style={{ color: "#666" }}>Cancelar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setShowPicker(false)}>
+                          <Text style={{ color: PURPLE, fontWeight: "700" }}>Hecho</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Picker con tema claro */}
+                      <View
+                        style={{
+                          backgroundColor: "#fff",
+                          borderRadius: 12,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <DateTimePicker
+                          value={fecha ?? new Date()}
+                          mode="date"
+                          display={Platform.OS === "ios" ? "spinner" : "calendar"}
+                          textColor="#111"
+                          themeVariant="light"
+                          onChange={(event, selectedDate) => {
+                            if (Platform.OS === "android") {
+                              if (event.type === "set" && selectedDate) setFecha(selectedDate);
+                              setShowPicker(false);
+                            } else if (selectedDate) {
+                              setFecha(selectedDate);
+                            }
+                          }}
+                          style={{
+                            backgroundColor: "#fff",
+                            height: 220,
+                          }}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                </Modal>
+              )}
+            </>
+          )}
+
+          {/* PLAN SUGERIDO */}
+          {planSugerido && (
+            <View
+              style={{
+                marginTop: 12,
+                padding: 12,
+                backgroundColor: "#F9FAFB",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#E5E7EB",
+              }}
+            >
+              <Text style={{ color: "#374151", fontSize: 14 }}>
+                <Text style={{ color: PURPLE, fontWeight: "700" }}>Plan sugerido: </Text>
+                {planSugerido.texto}
+              </Text>
+            </View>
+          )}
+
+          {/* DESCRIPCIÓN */}
+          <Text style={[styles.label, { marginTop: 16 }]}>Descripción (Opcional)</Text>
+          <TextInput
+            ref={refDesc}
+            value={descripcion}
+            onChangeText={setDescripcion}
+            placeholder="Escribe los detalles de tu deseo…"
+            style={styles.textarea}
+            multiline
+            textAlignVertical="top"
+            inputAccessoryViewID={isIOS ? "acc-addwish" : undefined}
+          />
+
+          {/* BOTÓN GUARDAR */}
+          <TouchableOpacity style={styles.btnPrimary} onPress={onSave}>
+            <Text style={{ color: "#fff", fontWeight: "700" }}>Guardar</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              amountRef.current?.blur();
-              Keyboard.dismiss();
-            }}
-          >
-            <Text style={{ color: PURPLE, fontWeight: "700" }}>Listo</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </KeyboardAvoidingView>
+        </ScrollView>
+
+        <DoneBar
+          nativeID="acc-addwish"
+          onDone={() => {
+            refMonto.current?.blur();
+            refDesc.current?.blur();
+            Keyboard.dismiss();
+          }}
+        />
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
-const styles = {
+/* ==== Estilos ==== */
+const styles = StyleSheet.create({
+  label: {
+    color: PURPLE,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
   input: {
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: GRAY_BORDER,
     paddingVertical: 10,
-    fontSize: 20,
+    fontSize: 16,
     color: "#111827",
-  } as const,
-  button: {
-    marginTop: 24,
+  },
+  textarea: {
+    borderWidth: 1,
+    borderColor: GRAY_BORDER,
+    borderRadius: 12,
+    padding: 12,
+    minHeight: 140,
+    fontSize: 16,
+    color: "#111827",
+    backgroundColor: "#fff",
+  },
+  btnPrimary: {
     backgroundColor: PURPLE,
-    borderRadius: 10,
     paddingVertical: 14,
+    borderRadius: 12,
     alignItems: "center",
-    shadowColor: PURPLE,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 2,
-  } as const,
-};
+    marginTop: 24,
+  },
+  accessoryBar: {
+    backgroundColor: "#F6F6F8",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: "#D1D5DB",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  accessoryBtn: {
+    color: PURPLE,
+    fontWeight: "700",
+    fontSize: 16,
+  },
+});
