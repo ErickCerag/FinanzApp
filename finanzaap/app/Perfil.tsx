@@ -1,22 +1,17 @@
+// app/Perfil.tsx  (o donde tengas tu pantalla de perfil)
 import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  StyleSheet,
-  SafeAreaView,
+  View, Text, TextInput, TouchableOpacity, Image, ScrollView,
+  KeyboardAvoidingView, Platform, Alert, StyleSheet, SafeAreaView,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { ArrowLeft } from "lucide-react-native";
 import BottomNav from "@/components/BarraNav";
-import { obtenerUsuario, upsertUsuario } from "@/Service/user/user.service";
+import {
+  obtenerSesion, upsertUsuario, logoutLocal, getRealUserIdFromSession,
+} from "@/Service/user/user.service";
+import { Href } from "expo-router";
 
 const PURPLE = "#6B21A8";
 const GRAY = "#9CA3AF";
@@ -26,19 +21,27 @@ const BG = "#F9FAFB";
 export default function PerfilPage() {
   const router = useRouter();
 
+  const [realId, setRealId] = useState<number | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
-  const [name, setName] = useState("René Ignacio");
-  const [email, setEmail] = useState("Rene.puentes@gmail.com");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState(""); // ← aquí sí mostramos el correo real
   const [saving, setSaving] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  // Cargar datos guardados
+  // Cargar datos guardados DEL USUARIO REAL (no snapshot)
   useEffect(() => {
     const load = async () => {
-      const u = await obtenerUsuario(1);
+      const u = await obtenerSesion();         // ← devuelve el real
+      const rid = await getRealUserIdFromSession();
+      setRealId(rid);
       if (u) {
         setName(u.Nombre || "");
         setEmail(u.Correo || "");
         setAvatar(u.Avatar || null);
+      } else {
+        setName("");
+        setEmail("");
+        setAvatar(null);
       }
     };
     load();
@@ -60,20 +63,49 @@ export default function PerfilPage() {
   };
 
   const onSave = async () => {
+    if (!realId) {
+      Alert.alert("Sesión", "No hay sesión activa.");
+      return;
+    }
     try {
       setSaving(true);
+      // ⚠️ Guardamos contra el usuario REAL, no el snapshot (id=1)
       await upsertUsuario({
-        id_usuario: 1,
+        id_usuario: realId,
         Nombre: name.trim(),
-        Correo: email.trim(),
+        Correo: email?.trim().toLowerCase() || null, // puedes permitir editar si quieres
         Avatar: avatar ?? null,
+        Apellido: null,
+        FechaNacim: null,
+        Contra: null, // no cambiamos contraseña aquí
       });
       Alert.alert("Listo", "Datos guardados correctamente.");
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      Alert.alert("Error", "No se pudieron guardar los datos.");
+      const msg = String(e?.message ?? e);
+      if (/UNIQUE|duplicado/i.test(msg)) {
+        Alert.alert("Correo en uso", "Ese correo ya está registrado por otro usuario.");
+      } else {
+        Alert.alert("Error", "No se pudieron guardar los datos.");
+      }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logoutLocal();                 // limpia snapshot y session
+      await new Promise(r => setTimeout(r, 50));
+      router.dismissAll?.();
+      router.replace("/login" as Href);
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "No se pudo cerrar sesión.");
+    } finally {
+      setLoggingOut(false);
     }
   };
 
@@ -97,7 +129,7 @@ export default function PerfilPage() {
         >
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ ...styles.container, paddingBottom: 110 }}
+            contentContainerStyle={{ ...styles.container, paddingBottom: 140 }}
             keyboardShouldPersistTaps="handled"
           >
             {/* Avatar */}
@@ -116,7 +148,7 @@ export default function PerfilPage() {
               </TouchableOpacity>
             </View>
 
-            {/* Campos */}
+            {/* Nombre */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Nombre</Text>
               <TextInput
@@ -129,6 +161,7 @@ export default function PerfilPage() {
               />
             </View>
 
+            {/* Correo (del REAL). Puedes dejarlo editable o deshabilitarlo si prefieres. */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Correo</Text>
               <TextInput
@@ -142,19 +175,25 @@ export default function PerfilPage() {
             </View>
 
             {/* Guardar */}
-            <TouchableOpacity
-              onPress={onSave}
-              disabled={saving}
-              style={[styles.saveBtn, saving && { opacity: 0.7 }]}
-            >
+            <TouchableOpacity onPress={onSave} disabled={saving}
+              style={[styles.saveBtn, saving && { opacity: 0.7 }]}>
+              <Text style={styles.saveText}>{saving ? "Guardando..." : "Guardar datos"}</Text>
+            </TouchableOpacity>
+
+            {/* Cerrar sesión */}
+            <TouchableOpacity onPress={onLogout} disabled={loggingOut}
+              style={[
+                styles.saveBtn,
+                { backgroundColor: "#EF4444", marginTop: 10 },
+                loggingOut && { opacity: 0.7 },
+              ]}>
               <Text style={styles.saveText}>
-                {saving ? "Guardando..." : "Guardar datos"}
+                {loggingOut ? "Cerrando..." : "Cerrar sesión"}
               </Text>
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
 
-        {/* Barra de navegación */}
         <BottomNav active="profile" />
       </SafeAreaView>
     </>
