@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from "react";
+import React, { useRef, useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
   crearWishlistSiNoExiste,
   agregarDeseo,
 } from "@/Service/wishList/wishlist.service";
+import { obtenerSesion } from "@/Service/user/user.service";
 
 const PURPLE = "#6B21A8";
 const GRAY_BORDER = "#E5E7EB";
@@ -52,7 +53,15 @@ function DoneBar({ nativeID, onDone }: { nativeID: string; onDone: () => void })
 export default function AddWish() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const usuarioId = 1;
+
+  // 📌 usuario REAL desde sesión
+  const [userId, setUserId] = useState<number | null>(null);
+  useEffect(() => {
+    (async () => {
+      const u = await obtenerSesion();
+      setUserId(u?.id_usuario ?? null);
+    })();
+  }, []);
 
   const [name, setName] = useState("");
   const [amountRaw, setAmountRaw] = useState("");
@@ -66,6 +75,11 @@ export default function AddWish() {
 
   /* === Guardar deseo === */
   const onSave = async () => {
+    if (!userId) {
+      Alert.alert("Sesión", "Primero inicia sesión para guardar tu deseo.");
+      return;
+    }
+
     const monto = Number(onlyDigits(amountRaw) || "0");
     const nombre = name.trim();
     if (!nombre || monto <= 0) {
@@ -74,7 +88,7 @@ export default function AddWish() {
     }
 
     try {
-      const idWishlist = await crearWishlistSiNoExiste(usuarioId);
+      const idWishlist = await crearWishlistSiNoExiste(userId);
       const fechaStr = fecha ? fecha.toISOString().slice(0, 10) : null;
       await agregarDeseo(idWishlist, nombre, monto, fechaStr, descripcion.trim() || null);
       Alert.alert("Listo", "Deseo agregado correctamente.");
@@ -104,7 +118,7 @@ export default function AddWish() {
       fecha.getFullYear() * 12 +
       fecha.getMonth() -
       (hoy.getFullYear() * 12 + hoy.getMonth());
-    const meses = diffMeses > 0 ? diffMeses : 1; // mínimo 1 mes
+    const meses = diffMeses > 0 ? diffMeses : 1;
     const ahorroMensual = monto / meses;
 
     return {
@@ -170,7 +184,6 @@ export default function AddWish() {
             paddingBottom: (insets.bottom || 0) + 40,
           }}
         >
-          {/* NOMBRE */}
           <Text style={styles.label}>Nombre</Text>
           <TextInput
             value={name}
@@ -180,7 +193,6 @@ export default function AddWish() {
             returnKeyType="next"
           />
 
-          {/* MONTO */}
           <Text style={[styles.label, { marginTop: 16 }]}>Monto requerido</Text>
           <TextInput
             ref={refMonto}
@@ -196,7 +208,6 @@ export default function AddWish() {
             inputAccessoryViewID={isIOS ? "acc-addwish" : undefined}
           />
 
-          {/* FECHA LÍMITE */}
           <Text style={[styles.label, { marginTop: 16 }]}>Fecha límite (Opcional)</Text>
 
           {isWeb ? (
@@ -263,7 +274,6 @@ export default function AddWish() {
                         </TouchableOpacity>
                       </View>
 
-                      {/* Picker con tema claro */}
                       <View
                         style={{
                           backgroundColor: "#fff",
@@ -285,10 +295,7 @@ export default function AddWish() {
                               setFecha(selectedDate);
                             }
                           }}
-                          style={{
-                            backgroundColor: "#fff",
-                            height: 220,
-                          }}
+                          style={{ backgroundColor: "#fff", height: 220 }}
                         />
                       </View>
                     </View>
@@ -298,7 +305,6 @@ export default function AddWish() {
             </>
           )}
 
-          {/* PLAN SUGERIDO */}
           {planSugerido && (
             <View
               style={{
@@ -317,7 +323,6 @@ export default function AddWish() {
             </View>
           )}
 
-          {/* DESCRIPCIÓN */}
           <Text style={[styles.label, { marginTop: 16 }]}>Descripción (Opcional)</Text>
           <TextInput
             ref={refDesc}
@@ -330,7 +335,6 @@ export default function AddWish() {
             inputAccessoryViewID={isIOS ? "acc-addwish" : undefined}
           />
 
-          {/* BOTÓN GUARDAR */}
           <TouchableOpacity style={styles.btnPrimary} onPress={onSave}>
             <Text style={{ color: "#fff", fontWeight: "700" }}>Guardar</Text>
           </TouchableOpacity>
