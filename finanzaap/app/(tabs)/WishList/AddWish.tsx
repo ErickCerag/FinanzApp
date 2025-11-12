@@ -108,6 +108,12 @@ export default function AddWish() {
     return `${day}-${month}-${year}`;
   };
 
+  /* ✅ Fecha segura para el DateTimePicker (evita 1969) */
+  const pickerDate = useMemo(() => {
+    if (fecha && !isNaN(fecha.getTime())) return fecha;
+    return new Date();
+  }, [fecha]);
+
   /* === Cálculo del plan sugerido === */
   const planSugerido = useMemo(() => {
     const monto = Number(onlyDigits(amountRaw) || "0");
@@ -282,7 +288,7 @@ export default function AddWish() {
                         }}
                       >
                         <DateTimePicker
-                          value={fecha ?? new Date()}
+                          value={pickerDate}   
                           mode="date"
                           display={Platform.OS === "ios" ? "spinner" : "calendar"}
                           textColor="#111"

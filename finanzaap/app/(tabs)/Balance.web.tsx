@@ -18,6 +18,9 @@ import {
   BarChart3,
 } from "lucide-react"; // ✅ correcto para web
 
+import BottomNav from "@/components/BarraNav";
+
+
 // ... tu código igual que antes
 
 
@@ -393,6 +396,7 @@ export default function BalancePage() {
           </View>
         </ScrollView>
       )}
+      <BottomNav active="balance" />
     </View>
   );
 }

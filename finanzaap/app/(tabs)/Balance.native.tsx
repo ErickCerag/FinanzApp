@@ -18,6 +18,7 @@ import {
   PieChart,
   BarChart3,
 } from "lucide-react-native";
+import BottomNav from "@/components/BarraNav";
 
 // ==== ESTILOS Y HELPERS ====
 const PURPLE = "#6B21A8";
@@ -392,6 +393,9 @@ export default function BalanceScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* 🔻 Barra de navegación inferior, igual que en otras vistas */}
+      <BottomNav active="balance" />
     </View>
   );
 }

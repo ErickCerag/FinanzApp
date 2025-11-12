@@ -8,6 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Modal,
+  StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Formik } from "formik";
@@ -110,8 +112,6 @@ export default function RegisterPage() {
                 fechaNac: "",
                 correo: "",
                 contra: "",
-                // Si ya tienes UI para avatar en registro, puedes
-                // agregar aquí un campo avatarUri y usarlo más abajo.
                 avatarUri: "" as string | undefined,
               }}
               validationSchema={schema}
@@ -133,7 +133,7 @@ export default function RegisterPage() {
                     contra: values.contra,
                   });
 
-                  // 3) (Opcional) Si tienes avatar en el registro, súbelo al usuario real
+                  // 3) (Opcional) avatar
                   if (values.avatarUri) {
                     await upsertUsuario({
                       id_usuario: newId,
@@ -146,13 +146,13 @@ export default function RegisterPage() {
                     });
                   }
 
-                  // 4) Cargar el usuario recién creado y ponerlo en sesión
+                  // 4) Poner en sesión
                   const u = await obtenerUsuario(newId);
                   if (u) {
-                    await iniciarSesion(u);      // ← Esto “inyecta” snapshot id=1 con Avatar/Nombre, etc.
+                    await iniciarSesion(u);
                   }
 
-                  // 5) Ir a tabs (o a donde apunte tu inicio)
+                  // 5) Ir a tabs
                   router.replace("/(tabs)");
                 } catch (e) {
                   setFieldError("correo", "No se pudo registrar. Intenta nuevamente.");
@@ -204,7 +204,9 @@ export default function RegisterPage() {
                       <input
                         type="date"
                         value={values.fechaNac}
-                        onChange={(e: any) => setFieldValue("fechaNac", e.target.value)}
+                        onChange={(e: any) =>
+                          setFieldValue("fechaNac", e.target.value)
+                        }
                         style={{
                           width: "100%",
                           padding: 14,
@@ -215,44 +217,101 @@ export default function RegisterPage() {
                       />
                     ) : (
                       <>
-                        <TouchableOpacity
-                          onPress={() => setShowPicker(true)}
+                        <View
                           style={{
                             flexDirection: "row",
                             alignItems: "center",
-                            justifyContent: "space-between",
-                            borderWidth: 1,
-                            borderColor: GRAY_BORDER,
-                            borderRadius: 10,
-                            paddingVertical: 14,
-                            paddingHorizontal: 14,
                           }}
                         >
-                          <Text
-                            style={{
-                              color: values.fechaNac ? "#111827" : "#9CA3AF",
-                            }}
+                          <TextInput
+                            value={
+                              values.fechaNac
+                                ? formatDisplayDate(values.fechaNac)
+                                : ""
+                            }
+                            editable={false}
+                            placeholder="Selecciona una fecha"
+                            placeholderTextColor="#9CA3AF"
+                            style={[inputStyle, { flex: 1 }]}
+                          />
+                          <TouchableOpacity
+                            onPress={() => setShowPicker(true)}
+                            style={{ padding: 8, marginLeft: 8 }}
                           >
-                            {values.fechaNac
-                              ? formatDisplayDate(values.fechaNac)
-                              : "Selecciona una fecha"}
-                          </Text>
-                          <Calendar size={20} color="#6B7280" />
-                        </TouchableOpacity>
+                            <Calendar size={20} color={PURPLE} />
+                          </TouchableOpacity>
+                        </View>
 
                         {showPicker && (
-                          <DateTimePicker
-                            value={values.fechaNac ? new Date(values.fechaNac) : new Date()}
-                            mode="date"
-                            display={Platform.OS === "ios" ? "inline" : "calendar"}
-                            maximumDate={new Date()}
-                            onChange={(_, selectedDate) => {
-                              setShowPicker(false);
-                              if (selectedDate) {
-                                setFieldValue("fechaNac", toISO(selectedDate));
-                              }
-                            }}
-                          />
+                          <Modal transparent animationType="slide">
+                            <View style={styles.modalBackdrop}>
+                              <View style={styles.modalSheet}>
+                                <View style={styles.modalHeader}>
+                                  <TouchableOpacity
+                                    onPress={() => setShowPicker(false)}
+                                  >
+                                    <Text style={{ color: "#666" }}>
+                                      Cancelar
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={() => setShowPicker(false)}
+                                  >
+                                    <Text
+                                      style={{
+                                        color: PURPLE,
+                                        fontWeight: "700",
+                                      }}
+                                    >
+                                      Hecho
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+
+                                <View style={styles.pickerContainer}>
+                                  <DateTimePicker
+                                    value={
+                                      values.fechaNac
+                                        ? new Date(values.fechaNac)
+                                        : new Date()
+                                    }
+                                    mode="date"
+                                    display={
+                                      Platform.OS === "ios"
+                                        ? "spinner"
+                                        : "calendar"
+                                    }
+                                    maximumDate={new Date()}
+                                    textColor="#111"
+                                    themeVariant="light"
+                                    onChange={(event: any, selectedDate?: Date) => {
+                                      if (Platform.OS === "android") {
+                                        if (
+                                          event.type === "set" &&
+                                          selectedDate
+                                        ) {
+                                          setFieldValue(
+                                            "fechaNac",
+                                            toISO(selectedDate)
+                                          );
+                                        }
+                                        setShowPicker(false);
+                                      } else if (selectedDate) {
+                                        setFieldValue(
+                                          "fechaNac",
+                                          toISO(selectedDate)
+                                        );
+                                      }
+                                    }}
+                                    style={{
+                                      backgroundColor: "#fff",
+                                      height: 220,
+                                    }}
+                                  />
+                                </View>
+                              </View>
+                            </View>
+                          </Modal>
                         )}
                       </>
                     )}
@@ -291,7 +350,11 @@ export default function RegisterPage() {
                         style={{ position: "absolute", right: 12, top: 12 }}
                         hitSlop={10}
                       >
-                        {showPass ? <EyeOff color="#6B7280" size={22} /> : <Eye color="#6B7280" size={22} />}
+                        {showPass ? (
+                          <EyeOff color="#6B7280" size={22} />
+                        ) : (
+                          <Eye color="#6B7280" size={22} />
+                        )}
                       </TouchableOpacity>
                     </View>
                     <ErrorText error={touched.contra && errors.contra} />
@@ -325,7 +388,9 @@ export default function RegisterPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <View>
-      <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>{label}</Text>
+      <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+        {label}
+      </Text>
       {children}
     </View>
   );
@@ -347,3 +412,28 @@ const inputStyle = {
   borderColor: GRAY_BORDER,
   borderRadius: 10,
 } as const;
+
+const styles = StyleSheet.create({
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  pickerContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+});
