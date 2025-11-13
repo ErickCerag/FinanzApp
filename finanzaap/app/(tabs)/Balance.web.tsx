@@ -21,6 +21,13 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { obtenerSesion } from "@/Service/user/user.service";
 import { obtenerWishlistConItems } from "@/Service/wishList/wishlist.service";
 
+import {
+  fetchIncomes,
+  fetchExpenses,
+  type Income,
+  type Expense,
+} from "@/Service/budget/budget.service";
+
 const PURPLE = "#6B21A8";
 const GREEN = "#15803d";
 const GRAY_BORDER = "#e5e7eb";
@@ -32,33 +39,25 @@ const currency = (v: number) =>
     maximumFractionDigits: 0,
   }).format(v);
 
-type Expense = { name: string; amount: number };
+type FilterKey =
+  | "all"
+  | "incomes"
+  | "incomesFixed"
+  | "expenses"
+  | "expensesFixed";
+
 type Goal = { name: string; progress: number };
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-async function fetchTopExpensesLocal(): Promise<Expense[]> {
-  await wait(300);
-  return [{ name: "Arriendo", amount: 120000 }];
-}
-
-async function exportExpensesPDFLocal(_params?: any) {
-  await wait(200);
-  return { ok: true, url: "/mock/report.pdf" };
-}
-
-async function exportExpensesXLSXLocal(_params?: any) {
-  await wait(200);
-  return { ok: true, url: "/mock/report.xlsx" };
-}
 
 export default function BalanceWeb() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [incomes, setIncomes] = useState<Income[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const [filter, setFilter] = useState<FilterKey>("all");
 
   const [filters] = useState({
     month: new Date().getMonth() + 1,
@@ -66,21 +65,19 @@ export default function BalanceWeb() {
   });
 
   const loadData = useCallback(async () => {
-    let cancel = false;
-
     setLoading(true);
     try {
-      const [e] = await Promise.all([fetchTopExpensesLocal()]);
-      if (cancel) return;
-      setExpenses(e);
+      const [ins, exps] = await Promise.all([fetchIncomes(), fetchExpenses()]);
+      setIncomes(ins);
+      setExpenses(exps);
 
       const u = await obtenerSesion();
       const uid = u?.id_usuario ?? null;
+
       if (!uid) {
         setGoals([]);
       } else {
         const { items } = await obtenerWishlistConItems(uid);
-        if (cancel) return;
 
         const mapped: Goal[] = items.map((it) => {
           const total = Number(it.Monto || 0);
@@ -94,6 +91,7 @@ export default function BalanceWeb() {
             );
           }
           if (completed) progress = 100;
+
           return { name: it.Nombre, progress };
         });
 
@@ -105,72 +103,84 @@ export default function BalanceWeb() {
       console.error(err);
       setError("No se pudieron cargar los datos.");
     } finally {
-      if (!cancel) setLoading(false);
+      setLoading(false);
     }
-
-    return () => {
-      cancel = true;
-    };
   }, []);
 
-  // 🔹 Igual que en native: recarga al enfocarse la vista
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      (async () => {
-        if (!active) return;
-        await loadData();
-      })();
-      return () => {
-        active = false;
-      };
-    }, [loadData, filters])
+      loadData();
+    }, [loadData])
   );
 
-  const totalExpenses = useMemo(
-    () => expenses.reduce((a, b) => a + b.amount, 0),
-    [expenses]
+  // FILTRADO IGUAL QUE EN MÓVIL
+  const filteredRows = useMemo(() => {
+    const incomeRows = incomes.map((i) => ({
+      id: `inc-${i.id}`,
+      name: i.name,
+      amount: i.amount,
+      kind: "income" as const,
+      isFixed: !!i.isFixed,
+    }));
+    const expenseRows = expenses.map((e) => ({
+      id: `exp-${e.id}`,
+      name: e.name,
+      amount: e.amount,
+      kind: "expense" as const,
+      isFixed: !!e.isFixed,
+    }));
+
+    switch (filter) {
+      case "incomes":
+        return incomeRows.filter((r) => !r.isFixed);
+      case "incomesFixed":
+        return incomeRows.filter((r) => r.isFixed);
+      case "expenses":
+        return expenseRows.filter((r) => !r.isFixed);
+      case "expensesFixed":
+        return expenseRows.filter((r) => r.isFixed);
+      default:
+        return [...incomeRows, ...expenseRows];
+    }
+  }, [incomes, expenses, filter]);
+
+  const totalFiltered = useMemo(
+    () => filteredRows.reduce((a, b) => a + b.amount, 0),
+    [filteredRows]
   );
+
+  // 🔥 Título dinámico igual que móvil
+  const filterTitle = useMemo(() => {
+    switch (filter) {
+      case "incomes":
+        return "Top ingresos del mes";
+      case "incomesFixed":
+        return "Top ingresos fijos del mes";
+      case "expenses":
+        return "Top gastos del mes";
+      case "expensesFixed":
+        return "Top gastos fijos del mes";
+      default:
+        return "Top movimientos del mes";
+    }
+  }, [filter]);
 
   const handleFilter = () => {
     alert(`Mes: ${filters.month} / Año: ${filters.year}`);
   };
 
-  const exportPDF = async () => {
-    try {
-      const res = await exportExpensesPDFLocal({ filters, expenses });
-      if (res.ok) {
-        alert("PDF generado (mock)");
-      }
-    } catch {
-      alert("No se pudo exportar a PDF.");
-    }
+  const exportPDF = () => {
+    alert("PDF generado (mock)");
   };
 
-  const exportXLSX = async () => {
-    try {
-      const res = await exportExpensesXLSXLocal({ filters, expenses });
-      if (res.ok) {
-        alert("Excel generado (mock)");
-      }
-    } catch {
-      alert("No se pudo exportar a Excel.");
-    }
+  const exportXLSX = () => {
+    alert("Excel generado (mock)");
   };
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#fff" }}>
-        <View
-          style={{
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <ActivityIndicator size="large" color={PURPLE} />
-          <Text style={{ marginTop: 10, color: "#555" }}>Cargando datos…</Text>
-        </View>
+      <View>
+        <ActivityIndicator size="large" color={PURPLE} />
         <BottomNav active="balance" />
       </View>
     );
@@ -212,200 +222,236 @@ export default function BalanceWeb() {
         </View>
       </View>
 
-      {error ? (
-        <View style={{ padding: 16 }}>
-          <Text style={{ color: "#b91c1c" }}>{error}</Text>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
+        {/* 🔥 Filtros igual que móvil */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginBottom: 12,
+          }}
+        >
+          {(
+            [
+              ["Todo", "all"],
+              ["Ingresos", "incomes"],
+              ["Ingresos fijos", "incomesFixed"],
+              ["Gastos", "expenses"],
+              ["Gastos fijos", "expensesFixed"],
+            ] as const
+          ).map(([label, key]) => {
+            const active = filter === key;
+            return (
+              <TouchableOpacity key={key} onPress={() => setFilter(key as FilterKey)}>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: active ? "700" : "400",
+                    color: active ? PURPLE : "#111",
+                  }}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-      ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
-          {/* Top 5 Gastos */}
+
+        {/* 🔥 TARJETA PRINCIPAL */}
+        <View
+          style={{
+            backgroundColor: "#fff",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: GRAY_BORDER,
+            padding: 14,
+            marginBottom: 20,
+          }}
+        >
+          {/* Título dinámico */}
+          <View
+            style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+          >
+            <Text
+              style={{
+                color: PURPLE,
+                fontSize: 18,
+                fontWeight: "700",
+                flex: 1,
+              }}
+            >
+              {filterTitle}
+            </Text>
+
+            <TouchableOpacity
+              onPress={handleFilter}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
+              <Text style={{ color: "#555", fontWeight: "600" }}>Filtrar</Text>
+              <Filter size={18} color="#111" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Lista */}
+          <View style={{ gap: 6 }}>
+            {filteredRows.map((e) => (
+              <View
+                key={e.id}
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Text style={{ color: "#111", fontSize: 16 }}>{e.name}</Text>
+                <Text
+                  style={{ color: "#111", fontSize: 16, fontWeight: "600" }}
+                >
+                  {currency(e.amount)}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* 🔥 SECCIÓN EXPORTAR — RESTAURADA */}
           <View
             style={{
-              backgroundColor: "#fff",
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: GRAY_BORDER,
-              padding: 14,
-              marginBottom: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              marginTop: 12,
+              gap: 12,
+            }}
+          >
+            <Text style={{ color: PURPLE, fontWeight: "600" }}>
+              Exportar datos :
+            </Text>
+
+            <TouchableOpacity
+              onPress={exportPDF}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderWidth: 1,
+                borderColor: GRAY_BORDER,
+                borderRadius: 8,
+              }}
+            >
+              <FileDown size={18} color="#b91c1c" />
+              <Text style={{ color: "#b91c1c", fontWeight: "700" }}>PDF</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={exportXLSX}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderWidth: 1,
+                borderColor: GRAY_BORDER,
+                borderRadius: 8,
+              }}
+            >
+              <FileSpreadsheet size={18} color="#065f46" />
+              <Text style={{ color: "#065f46", fontWeight: "700" }}>EXCEL</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Total */}
+          <View
+            style={{
+              marginTop: 12,
+              borderTopWidth: 1,
+              borderTopColor: GRAY_BORDER,
+              paddingTop: 8,
             }}
           >
             <View
-              style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
             >
-              <Text
-                style={{
-                  color: PURPLE,
-                  fontSize: 18,
-                  fontWeight: "700",
-                  flex: 1,
-                }}
-              >
-                Top 5 gastos del mes
+              <Text style={{ color: "#555" }}>Total</Text>
+              <Text style={{ color: "#111", fontWeight: "700" }}>
+                {currency(totalFiltered)}
               </Text>
-              <TouchableOpacity
-                onPress={handleFilter}
-                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-              >
-                <Text style={{ color: "#555", fontWeight: "600" }}>Filtrar</Text>
-                <Filter size={18} color="#111" />
-              </TouchableOpacity>
             </View>
+          </View>
+        </View>
 
-            <View style={{ gap: 6 }}>
-              {expenses.map((e) => (
+        {/* PROGRESO DE METAS */}
+        <View
+          style={{
+            backgroundColor: "#fff",
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: GRAY_BORDER,
+            padding: 14,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 10,
+              gap: 8,
+            }}
+          >
+            <Text
+              style={{
+                color: PURPLE,
+                fontSize: 18,
+                fontWeight: "700",
+                flex: 1,
+              }}
+            >
+              Progreso de metas
+            </Text>
+            <TrendingUp size={18} color="#111" />
+            <PieChart size={18} color="#111" />
+            <BarChart3 size={18} color="#111" />
+          </View>
+
+          <View style={{ gap: 14 }}>
+            {goals.map((g) => (
+              <View key={g.name}>
                 <View
-                  key={e.name}
                   style={{
                     flexDirection: "row",
                     justifyContent: "space-between",
+                    marginBottom: 6,
                   }}
                 >
-                  <Text style={{ color: "#111", fontSize: 16 }}>{e.name}</Text>
-                  <Text
-                    style={{ color: "#111", fontSize: 16, fontWeight: "600" }}
-                  >
-                    {currency(e.amount)}
+                  <Text style={{ color: "#111" }}>{g.name}</Text>
+                  <Text style={{ color: "#111", fontWeight: "600" }}>
+                    {g.progress} %
                   </Text>
                 </View>
-              ))}
-            </View>
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginTop: 12,
-                gap: 12,
-              }}
-            >
-              <Text style={{ color: PURPLE, fontWeight: "600" }}>
-                Exportar datos :
-              </Text>
-              <TouchableOpacity
-                onPress={exportPDF}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderWidth: 1,
-                  borderColor: GRAY_BORDER,
-                  borderRadius: 8,
-                }}
-              >
-                <FileDown size={18} color="#b91c1c" />
-                <Text style={{ color: "#b91c1c", fontWeight: "700" }}>PDF</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={exportXLSX}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderWidth: 1,
-                  borderColor: GRAY_BORDER,
-                  borderRadius: 8,
-                }}
-              >
-                <FileSpreadsheet size={18} color="#065f46" />
-                <Text style={{ color: "#065f46", fontWeight: "700" }}>EXCEL</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View
-              style={{
-                marginTop: 10,
-                borderTopWidth: 1,
-                borderTopColor: GRAY_BORDER,
-                paddingTop: 8,
-              }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <Text style={{ color: "#555" }}>Total</Text>
-                <Text style={{ color: "#111", fontWeight: "700" }}>
-                  {currency(totalExpenses)}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Progreso de metas */}
-          <View
-            style={{
-              backgroundColor: "#fff",
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: GRAY_BORDER,
-              padding: 14,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 10,
-                gap: 8,
-              }}
-            >
-              <Text
-                style={{
-                  color: PURPLE,
-                  fontSize: 18,
-                  fontWeight: "700",
-                  flex: 1,
-                }}
-              >
-                Progreso de metas
-              </Text>
-              <TrendingUp size={18} color="#111" />
-              <PieChart size={18} color="#111" />
-              <BarChart3 size={18} color="#111" />
-            </View>
-
-            <View style={{ gap: 14 }}>
-              {goals.map((g) => (
-                <View key={g.name}>
+                <View
+                  style={{
+                    height: 8,
+                    backgroundColor: "#f3f4f6",
+                    borderRadius: 999,
+                    overflow: "hidden",
+                    borderWidth: 1,
+                    borderColor: "#e5e7eb",
+                  }}
+                >
                   <View
                     style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      marginBottom: 6,
+                      width: `${g.progress}%`,
+                      height: "100%",
+                      backgroundColor:
+                        g.progress >= 100 ? GREEN : "#22c55e",
                     }}
-                  >
-                    <Text style={{ color: "#111" }}>{g.name}</Text>
-                    <Text style={{ color: "#111", fontWeight: "600" }}>
-                      {g.progress} %
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      height: 8,
-                      backgroundColor: "#f3f4f6",
-                      borderRadius: 999,
-                      overflow: "hidden",
-                      borderWidth: 1,
-                      borderColor: "#e5e7eb",
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: `${g.progress}%`,
-                        height: "100%",
-                        backgroundColor:
-                          g.progress >= 100 ? GREEN : "#22c55e",
-                      }}
-                    />
-                  </View>
+                  />
                 </View>
-              ))}
-            </View>
+              </View>
+            ))}
           </View>
-        </ScrollView>
-      )}
+        </View>
+      </ScrollView>
 
       <BottomNav active="balance" />
     </View>

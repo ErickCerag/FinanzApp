@@ -1,5 +1,5 @@
 // app/Balance.native.tsx
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,9 +20,17 @@ import {
   PieChart,
   BarChart3,
 } from "lucide-react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import BottomNav from "@/components/BarraNav";
 import { obtenerSesion } from "@/Service/user/user.service";
 import { obtenerWishlistConItems } from "@/Service/wishList/wishlist.service";
+import {
+  fetchIncomes,
+  fetchExpenses,
+  type Income,
+  type Expense,
+} from "@/Service/budget/budget.service";
 
 const PURPLE = "#6B21A8";
 const GREEN = "#15803d";
@@ -34,65 +43,78 @@ const currency = (v: number) =>
     maximumFractionDigits: 0,
   }).format(v);
 
-type Expense = { name: string; amount: number };
 type Goal = { name: string; progress: number };
 
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+type FilterKey =
+  | "all"
+  | "incomes"
+  | "incomesFixed"
+  | "expenses"
+  | "expensesFixed";
 
-// 🔹 Mock de gastos (no lo tocamos aún)
-async function fetchTopExpensesLocal(): Promise<Expense[]> {
-  await wait(300);
-  return [
-    { name: "Arriendo", amount: 350000 },
-    { name: "Alimentación", amount: 100000 },
-  ];
-}
-
-async function exportExpensesPDFLocal(_params?: any) {
-  await wait(200);
-  return { ok: true, url: "/mock/report.pdf" };
-}
-
-async function exportExpensesXLSXLocal(_params?: any) {
-  await wait(200);
-  return { ok: true, url: "/mock/report.xlsx" };
-}
+const FILTER_KEY = "balance_filter_native_v1";
 
 export default function BalanceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [incomes, setIncomes] = useState<Income[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [error, setError] = useState<string | null>(null);
+
+  const [filter, setFilter] = useState<FilterKey>("all");
 
   const [filters] = useState({
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
   });
 
-  // 🔹 Lógica de carga centralizada
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(FILTER_KEY);
+        if (
+          saved === "all" ||
+          saved === "incomes" ||
+          saved === "incomesFixed" ||
+          saved === "expenses" ||
+          saved === "expensesFixed"
+        ) {
+          setFilter(saved);
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const saveFilter = useCallback(async (value: FilterKey) => {
+    setFilter(value);
+    try {
+      await AsyncStorage.setItem(FILTER_KEY, value);
+    } catch {}
+  }, []);
+
   const loadData = useCallback(async () => {
     let cancel = false;
-
     setLoading(true);
     try {
-      // Top gastos
-      const [e] = await Promise.all([fetchTopExpensesLocal()]);
+      const [ins, exps] = await Promise.all([fetchIncomes(), fetchExpenses()]);
       if (cancel) return;
-      setExpenses(e);
+      setIncomes(ins);
+      setExpenses(exps);
 
-      // Wishlist → progreso de metas
       const u = await obtenerSesion();
       const uid = u?.id_usuario ?? null;
+
       if (!uid) {
         setGoals([]);
       } else {
         const { items } = await obtenerWishlistConItems(uid);
         if (cancel) return;
 
-        const mapped: Goal[] = items.map((it) => {
+        const mapped: Goal[] = items.map((it: any) => {
           const total = Number(it.Monto || 0);
           const saved = Number(it.Ahorrado || 0);
           const completed = (it.Completado ?? 0) === 1;
@@ -104,7 +126,6 @@ export default function BalanceScreen() {
             );
           }
           if (completed) progress = 100;
-
           return { name: it.Nombre, progress };
         });
 
@@ -124,7 +145,6 @@ export default function BalanceScreen() {
     };
   }, []);
 
-  // 🔹 Se ejecuta cada vez que la pantalla gana foco (incluida la primera vez)
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -135,12 +155,42 @@ export default function BalanceScreen() {
       return () => {
         active = false;
       };
-    }, [loadData, filters])
+    }, [loadData])
   );
 
-  const totalExpenses = useMemo(
-    () => expenses.reduce((a, b) => a + b.amount, 0),
-    [expenses]
+  const filteredRows = useMemo(() => {
+    const incomeRows = incomes.map((i) => ({
+      id: `inc-${i.id}`,
+      name: i.name,
+      amount: i.amount,
+      kind: "income" as const,
+      isFixed: !!i.isFixed,
+    }));
+    const expenseRows = expenses.map((e) => ({
+      id: `exp-${e.id}`,
+      name: e.name,
+      amount: e.amount,
+      kind: "expense" as const,
+      isFixed: !!e.isFixed,
+    }));
+
+    switch (filter) {
+      case "incomes":
+        return incomeRows.filter((r) => !r.isFixed);
+      case "incomesFixed":
+        return incomeRows.filter((r) => r.isFixed);
+      case "expenses":
+        return expenseRows.filter((r) => !r.isFixed);
+      case "expensesFixed":
+        return expenseRows.filter((r) => r.isFixed);
+      default:
+        return [...incomeRows, ...expenseRows];
+    }
+  }, [incomes, expenses, filter]);
+
+  const totalFiltered = useMemo(
+    () => filteredRows.reduce((a, b) => a + b.amount, 0),
+    [filteredRows]
   );
 
   const handleFilter = () => {
@@ -148,30 +198,28 @@ export default function BalanceScreen() {
   };
 
   const exportPDF = async () => {
-    try {
-      const res = await exportExpensesPDFLocal({ filters, expenses });
-      if (res.ok) {
-        Alert.alert("PDF generado", "Abrir reporte", [
-          { text: "Abrir", onPress: () => console.log("open", res.url) },
-        ]);
-      }
-    } catch {
-      Alert.alert("Error", "No se pudo exportar a PDF.");
-    }
+    Alert.alert("PDF generado", "Abrir reporte", [{ text: "OK" }]);
   };
 
   const exportXLSX = async () => {
-    try {
-      const res = await exportExpensesXLSXLocal({ filters, expenses });
-      if (res.ok) {
-        Alert.alert("Excel generado", "Abrir reporte", [
-          { text: "Abrir", onPress: () => console.log("open", res.url) },
-        ]);
-      }
-    } catch {
-      Alert.alert("Error", "No se pudo exportar a Excel.");
-    }
+    Alert.alert("Excel generado", "Abrir reporte", [{ text: "OK" }]);
   };
+
+  // 🔥 agregado: Título dinámico
+  const filterTitle = useMemo(() => {
+    switch (filter) {
+      case "incomes":
+        return "Top ingresos del mes";
+      case "incomesFixed":
+        return "Top ingresos fijos del mes";
+      case "expenses":
+        return "Top gastos del mes";
+      case "expensesFixed":
+        return "Top gastos fijos del mes";
+      default:
+        return "Top movimientos del mes";
+    }
+  }, [filter]);
 
   if (loading) {
     return (
@@ -184,7 +232,9 @@ export default function BalanceScreen() {
           }}
         >
           <ActivityIndicator size="large" color={PURPLE} />
-          <Text style={{ marginTop: 10, color: "#555" }}>Cargando datos…</Text>
+          <Text style={{ marginTop: 10, color: "#555" }}>
+            Cargando datos…
+          </Text>
         </View>
         <BottomNav active="balance" />
       </View>
@@ -240,7 +290,44 @@ export default function BalanceScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
-          {/* Top 5 Gastos */}
+          {/* Filtros */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginBottom: 12,
+            }}
+          >
+            {(
+              [
+                ["Todo", "all"],
+                ["Ingresos", "incomes"],
+                ["Ingresos fijos", "incomesFixed"],
+                ["Gastos", "expenses"],
+                ["Gastos fijos", "expensesFixed"],
+              ] as const
+            ).map(([label, key]) => {
+              const active = filter === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => saveFilter(key as FilterKey)}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: active ? "700" : "400",
+                      color: active ? PURPLE : "#111",
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Top movimientos */}
           <View
             style={{
               backgroundColor: "#fff",
@@ -252,8 +339,13 @@ export default function BalanceScreen() {
             }}
           >
             <View
-              style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
             >
+              {/* 🔥 aquí se usa el título dinámico */}
               <Text
                 style={{
                   color: PURPLE,
@@ -262,29 +354,38 @@ export default function BalanceScreen() {
                   flex: 1,
                 }}
               >
-                Top 5 gastos del mes
+                {filterTitle}
               </Text>
+
               <TouchableOpacity
                 onPress={handleFilter}
                 style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
-                <Text style={{ color: "#555", fontWeight: "600" }}>Filtrar</Text>
+                <Text style={{ color: "#555", fontWeight: "600" }}>
+                  Filtrar
+                </Text>
                 <Filter size={18} color="#111" />
               </TouchableOpacity>
             </View>
 
             <View style={{ gap: 6 }}>
-              {expenses.map((e) => (
+              {filteredRows.map((e) => (
                 <View
-                  key={e.name}
+                  key={e.id}
                   style={{
                     flexDirection: "row",
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ color: "#111", fontSize: 16 }}>{e.name}</Text>
+                  <Text style={{ color: "#111", fontSize: 16 }}>
+                    {e.name}
+                  </Text>
                   <Text
-                    style={{ color: "#111", fontSize: 16, fontWeight: "600" }}
+                    style={{
+                      color: "#111",
+                      fontSize: 16,
+                      fontWeight: "600",
+                    }}
                   >
                     {currency(e.amount)}
                   </Text>
@@ -303,6 +404,7 @@ export default function BalanceScreen() {
               <Text style={{ color: PURPLE, fontWeight: "600" }}>
                 Exportar datos :
               </Text>
+
               <TouchableOpacity
                 onPress={exportPDF}
                 style={{
@@ -317,7 +419,9 @@ export default function BalanceScreen() {
                 }}
               >
                 <FileDown size={18} color="#b91c1c" />
-                <Text style={{ color: "#b91c1c", fontWeight: "700" }}>PDF</Text>
+                <Text style={{ color: "#b91c1c", fontWeight: "700" }}>
+                  PDF
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -334,7 +438,9 @@ export default function BalanceScreen() {
                 }}
               >
                 <FileSpreadsheet size={18} color="#065f46" />
-                <Text style={{ color: "#065f46", fontWeight: "700" }}>EXCEL</Text>
+                <Text style={{ color: "#065f46", fontWeight: "700" }}>
+                  EXCEL
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -346,10 +452,15 @@ export default function BalanceScreen() {
                 paddingTop: 8,
               }}
             >
-              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
                 <Text style={{ color: "#555" }}>Total</Text>
                 <Text style={{ color: "#111", fontWeight: "700" }}>
-                  {currency(totalExpenses)}
+                  {currency(totalFiltered)}
                 </Text>
               </View>
             </View>

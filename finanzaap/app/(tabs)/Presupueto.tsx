@@ -1,19 +1,35 @@
 // app/(tabs)/Presupuesto.tsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
-  View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Modal,
-  TextInput, Alert, Platform, StyleSheet, KeyboardAvoidingView, InputAccessoryView, Keyboard
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
+  Platform,
+  StyleSheet,
+  KeyboardAvoidingView,
+  InputAccessoryView,
+  Keyboard,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeft, Plus, MoreHorizontal, CheckSquare, Square } from "lucide-react-native";
 
 import {
-  fetchIncomes, fetchExpenses,
-  addIncome, addExpense,
-  updateIncome, updateExpense,
-  deleteIncome, deleteExpense,
-  type Income, type Expense
+  fetchIncomes,
+  fetchExpenses,
+  addIncome,
+  addExpense,
+  updateIncome,
+  updateExpense,
+  deleteIncome,
+  deleteExpense,
+  type Income,
+  type Expense,
 } from "@/Service/budget/budget.service";
 
 /* ======== Constantes/Helpers UI ======== */
@@ -23,7 +39,11 @@ const isIOS = Platform.OS === "ios";
 const isWeb = Platform.OS === "web";
 
 const currency = (v: number) =>
-  new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(v);
+  new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    maximumFractionDigits: 0,
+  }).format(v);
 const onlyDigits = (s: string) => s.replace(/\D+/g, "");
 
 /* ======== DoneBar iOS ======== */
@@ -33,40 +53,38 @@ function DoneBar({ nativeID, onDone }: { nativeID: string; onDone: () => void })
     <InputAccessoryView nativeID={nativeID}>
       <View style={styles.accessoryBar}>
         <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={onDone}><Text style={styles.accessoryBtn}>Listo</Text></TouchableOpacity>
+        <TouchableOpacity onPress={onDone}>
+          <Text style={styles.accessoryBtn}>Listo</Text>
+        </TouchableOpacity>
       </View>
     </InputAccessoryView>
   );
 }
 
-/* ======== Componente Modal Unificado ======== */
+/* ======== Modal (agregar / editar) ======== */
 function BudgetModal({
   visible,
   onClose,
   type,
   editingItem,
-  onSubmit
+  onSubmit,
 }: {
   visible: boolean;
   onClose: () => void;
   type: "income" | "expense";
   editingItem: Income | Expense | null;
-  onSubmit: (data: { name: string; amount: number; day?: number }) => void;
+  onSubmit: (data: { name: string; amount: number; day?: number; isFixed?: boolean }) => void;
 }) {
   const isEditing = !!editingItem;
-  
-  // Estados del formulario
+
   const [name, setName] = useState("");
   const [amountRaw, setAmountRaw] = useState("");
   const [dayRaw, setDayRaw] = useState("01");
-  // 🔹 NUEVO: ¿es fijo?
   const [isFixed, setIsFixed] = useState(false);
 
-  // Refs para inputs
   const refAmount = useRef<TextInput>(null);
   const refDay = useRef<TextInput>(null);
 
-  // Resetear formulario cuando se abre/cierra el modal
   useEffect(() => {
     if (visible) {
       if (isEditing && editingItem) {
@@ -75,11 +93,8 @@ function BudgetModal({
         if (type === "expense") {
           setDayRaw(String((editingItem as Expense).day).padStart(2, "0"));
         }
-        // Si en el futuro Income/Expense tienen isFixed, lo tomamos;
-        // por ahora queda en false al crear.
-        setIsFixed((editingItem as any)?.isFixed ?? false);
+        setIsFixed(!!(editingItem as any)?.isFixed);
       } else {
-        // Valores por defecto para nuevo item
         setName(type === "income" ? "Sueldo" : "");
         setAmountRaw("");
         setDayRaw("01");
@@ -103,15 +118,13 @@ function BudgetModal({
         Alert.alert("Día inválido", "El día debe estar entre 1 y 31.");
         return;
       }
-      onSubmit({ name: trimmedName, amount, day });
+      onSubmit({ name: trimmedName, amount, day, isFixed });
     } else {
-      onSubmit({ name: trimmedName, amount });
+      onSubmit({ name: trimmedName, amount, isFixed });
     }
-
-    // 🔸 Por ahora isFixed no se envía a onSubmit; lo cableamos más adelante
   };
 
-  const modalTitle = isEditing 
+  const modalTitle = isEditing
     ? `Editar ${type === "income" ? "ingreso" : "gasto"}`
     : `Agregar ${type === "income" ? "ingreso" : "gasto"}`;
 
@@ -145,21 +158,17 @@ function BudgetModal({
               inputAccessoryViewID={isIOS ? `acc-${type}-amount` : undefined}
             />
 
-            {/* 🔹 NUEVO: Check "fijo" */}
+            {/* Check fijo */}
             <View style={styles.fixedRow}>
-              <TouchableOpacity onPress={() => setIsFixed(v => !v)}>
-                {isFixed ? (
-                  <CheckSquare size={20} color={PURPLE} />
-                ) : (
-                  <Square size={20} color="#6B7280" />
-                )}
+              <TouchableOpacity onPress={() => setIsFixed((v) => !v)}>
+                {isFixed ? <CheckSquare size={20} color={PURPLE} /> : <Square size={20} color="#6B7280" />}
               </TouchableOpacity>
               <Text style={styles.fixedLabel}>
                 {type === "income" ? "¿Ingreso fijo?" : "¿Gasto fijo?"}
               </Text>
             </View>
 
-            {/* Día (solo para gastos) */}
+            {/* Día (solo gastos) */}
             {type === "expense" && (
               <>
                 <Text style={[styles.label, { marginTop: 12 }]}>Día del mes (1–31)</Text>
@@ -188,16 +197,28 @@ function BudgetModal({
         </KeyboardAvoidingView>
       </View>
 
-      {/* DoneBars para iOS */}
-      <DoneBar nativeID={`acc-${type}-amount`} onDone={() => { refAmount.current?.blur(); Keyboard.dismiss(); }} />
+      <DoneBar
+        nativeID={`acc-${type}-amount`}
+        onDone={() => {
+          refAmount.current?.blur();
+          Keyboard.dismiss();
+        }}
+      />
       {type === "expense" && (
-        <DoneBar nativeID={`acc-${type}-day`} onDone={() => { refDay.current?.blur(); Keyboard.dismiss(); }} />
+        <DoneBar
+          nativeID={`acc-${type}-day`}
+          onDone={() => {
+            refDay.current?.blur();
+            Keyboard.dismiss();
+          }}
+        />
       )}
     </Modal>
   );
 }
 
 /* ======== Componente Principal ======== */
+
 export default function BudgetPage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -208,7 +229,6 @@ export default function BudgetPage() {
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
-  // Estado unificado para el modal
   const [modalState, setModalState] = useState<{
     visible: boolean;
     type: "income" | "expense";
@@ -216,10 +236,9 @@ export default function BudgetPage() {
   }>({
     visible: false,
     type: "income",
-    editingItem: null
+    editingItem: null,
   });
 
-  // Web: menú "..." anclado
   const [menu, setMenu] = useState<{ type: "income" | "expense"; id: number; x: number; y: number } | null>(null);
 
   const loadAll = useCallback(async () => {
@@ -241,72 +260,84 @@ export default function BudgetPage() {
     loadAll();
   }, [loadAll]);
 
-  /* ======== Totales ======== */
   const totalIncome = useMemo(() => incomes.reduce((a, b) => a + b.amount, 0), [incomes]);
   const totalExpenses = useMemo(() => expenses.reduce((a, b) => a + b.amount, 0), [expenses]);
 
-  /* ======== Handlers Modal ======== */
   const openAddModal = (type: "income" | "expense") => {
-    setModalState({
-      visible: true,
-      type,
-      editingItem: null
-    });
+    setModalState({ visible: true, type, editingItem: null });
   };
 
   const openEditModal = (type: "income" | "expense", item: Income | Expense) => {
-    setModalState({
-      visible: true,
-      type,
-      editingItem: item
-    });
+    setModalState({ visible: true, type, editingItem: item });
   };
 
   const closeModal = () => {
-    setModalState(prev => ({ ...prev, visible: false }));
+    setModalState((prev) => ({ ...prev, visible: false }));
   };
 
-  const handleModalSubmit = async (data: { name: string; amount: number; day?: number }) => {
+  const handleModalSubmit = async (data: { name: string; amount: number; day?: number; isFixed?: boolean }) => {
     const { type, editingItem } = modalState;
     const isEditing = !!editingItem;
 
     try {
       if (isEditing) {
-        // Editar item existente
         if (type === "income") {
-          const updated = await updateIncome({ id: editingItem!.id, ...data });
-          setIncomes(prev => prev.map(i => i.id === updated.id ? updated : i));
+          const updated = await updateIncome({
+            id: editingItem!.id,
+            name: data.name,
+            amount: data.amount,
+            isFixed: data.isFixed ?? false,
+          });
+          setIncomes((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
         } else {
-          const updated = await updateExpense({ id: editingItem!.id, ...data, day: data.day! });
-          setExpenses(prev => prev.map(i => i.id === updated.id ? updated : i));
+          const updated = await updateExpense({
+            id: editingItem!.id,
+            name: data.name,
+            amount: data.amount,
+            day: data.day!,
+            isFixed: data.isFixed ?? false,
+          });
+          setExpenses((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
         }
       } else {
-        // Agregar nuevo item
         if (type === "income") {
-          const created = await addIncome(data);
-          setIncomes(prev => [created, ...prev]);
+          const created = await addIncome({
+            name: data.name,
+            amount: data.amount,
+            isFixed: data.isFixed ?? false,
+          });
+          setIncomes((prev) => [created, ...prev]);
         } else {
-          const created = await addExpense({ ...data, day: data.day! });
-          setExpenses(prev => [created, ...prev]);
+          const created = await addExpense({
+            name: data.name,
+            amount: data.amount,
+            day: data.day!,
+            isFixed: data.isFixed ?? false,
+          });
+          setExpenses((prev) => [created, ...prev]);
         }
       }
       closeModal();
     } catch (e) {
       console.error(e);
-      Alert.alert("Error", `No se pudo ${isEditing ? "actualizar" : "agregar"} el ${type === "income" ? "ingreso" : "gasto"}.`);
+      Alert.alert(
+        "Error",
+        `No se pudo ${isEditing ? "actualizar" : "agregar"} el ${
+          type === "income" ? "ingreso" : "gasto"
+        }.`
+      );
     }
   };
 
-  /* ======== Handlers: Borrar ======== */
   const confirmDelete = (type: "income" | "expense", id: number, name: string) => {
     const run = async () => {
       try {
         if (type === "income") {
           await deleteIncome(id);
-          setIncomes(prev => prev.filter(i => i.id !== id));
+          setIncomes((prev) => prev.filter((i) => i.id !== id));
         } else {
           await deleteExpense(id);
-          setExpenses(prev => prev.filter(i => i.id !== id));
+          setExpenses((prev) => prev.filter((g) => g.id !== id));
         }
       } catch (e) {
         console.error(e);
@@ -319,12 +350,11 @@ export default function BudgetPage() {
     } else {
       Alert.alert("Eliminar", `¿Eliminar "${name}"?`, [
         { text: "Cancelar", style: "cancel" },
-        { text: "Eliminar", style: "destructive", onPress: run }
+        { text: "Eliminar", style: "destructive", onPress: run },
       ]);
     }
   };
 
-  /* ======== Render ======== */
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -337,22 +367,42 @@ export default function BudgetPage() {
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
       {/* Header morado */}
-      <View style={{
-        backgroundColor: PURPLE,
-        paddingTop: insets.top + 10, paddingHorizontal: 16, paddingBottom: 18,
-        borderBottomLeftRadius: 12, borderBottomRightRadius: 12, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 8, elevation: 2
-      }}>
+      <View
+        style={{
+          backgroundColor: PURPLE,
+          paddingTop: insets.top + 10,
+          paddingHorizontal: 16,
+          paddingBottom: 18,
+          borderBottomLeftRadius: 12,
+          borderBottomRightRadius: 12,
+          shadowColor: "#000",
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
+          elevation: 2,
+        }}
+      >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={{ padding: 4, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.1)" }}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={{
+              padding: 4,
+              borderRadius: 999,
+              backgroundColor: "rgba(255,255,255,0.1)",
+            }}
+          >
             <ArrowLeft color="#fff" size={22} />
           </TouchableOpacity>
-          <Text style={{ color: "#fff", fontSize: 25, fontWeight: "700", marginLeft: 12 }}>Gestionar presupuesto</Text>
+          <Text style={{ color: "#fff", fontSize: 25, fontWeight: "700", marginLeft: 12 }}>
+            Gestionar presupuesto
+          </Text>
         </View>
       </View>
 
       {error ? (
-        <View style={{ padding: 16 }}><Text style={{ color: "#b91c1c" }}>{error}</Text></View>
+        <View style={{ padding: 16 }}>
+          <Text style={{ color: "#b91c1c" }}>{error}</Text>
+        </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: (insets.bottom || 0) + 24 }}>
           {/* Totales */}
@@ -364,7 +414,16 @@ export default function BudgetPage() {
           </View>
 
           {/* Ingresos */}
-          <View style={{ borderTopWidth: 6, borderTopColor: "#F2F2F2", borderBottomWidth: 1, borderBottomColor: GRAY_BORDER, paddingHorizontal: 16, paddingVertical: 12 }}>
+          <View
+            style={{
+              borderTopWidth: 6,
+              borderTopColor: "#F2F2F2",
+              borderBottomWidth: 1,
+              borderBottomColor: GRAY_BORDER,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+            }}
+          >
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
               <Text style={{ color: PURPLE, fontSize: 20, fontWeight: "700", flex: 1 }}>Ingresos</Text>
               <TouchableOpacity onPress={() => openAddModal("income")}>
@@ -373,20 +432,44 @@ export default function BudgetPage() {
             </View>
 
             {incomes.map((i) => (
-              <View key={i.id} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 10, alignItems: "center" }}>
-                <Text style={{ color: "#333", fontSize: 16 }}>{i.name}</Text>
+              <View
+                key={i.id}
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  paddingVertical: 10,
+                  alignItems: "center",
+                }}
+              >
+                <View>
+                  <Text style={{ color: "#333", fontSize: 16 }}>{i.name}</Text>
+                  {i.isFixed && (
+                    <Text style={{ color: "#16a34a", fontSize: 12 }}>Ingreso fijo</Text>
+                  )}
+                </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Text style={{ color: "#111", fontSize: 22, fontWeight: "700" }}>{currency(i.amount)}</Text>
+                  <Text style={{ color: "#111", fontSize: 22, fontWeight: "700" }}>
+                    {currency(i.amount)}
+                  </Text>
                   <TouchableOpacity
                     onPress={(ev: any) => {
                       if (isWeb) {
                         const rect = ev?.target?.getBoundingClientRect?.();
-                        setMenu({ type: "income", id: i.id, x: rect ? rect.left : 0, y: rect ? rect.bottom : 0 });
+                        setMenu({
+                          type: "income",
+                          id: i.id,
+                          x: rect ? rect.left : 0,
+                          y: rect ? rect.bottom : 0,
+                        });
                       } else {
                         Alert.alert("Opciones", i.name, [
                           { text: "Editar", onPress: () => openEditModal("income", i) },
-                          { text: "Eliminar", style: "destructive", onPress: () => confirmDelete("income", i.id, i.name) },
-                          { text: "Cancelar", style: "cancel" }
+                          {
+                            text: "Eliminar",
+                            style: "destructive",
+                            onPress: () => confirmDelete("income", i.id, i.name),
+                          },
+                          { text: "Cancelar", style: "cancel" },
                         ]);
                       }
                     }}
@@ -400,7 +483,14 @@ export default function BudgetPage() {
           </View>
 
           {/* Gastos */}
-          <View style={{ borderTopWidth: 6, borderTopColor: "#F2F2F2", paddingHorizontal: 16, paddingVertical: 12 }}>
+          <View
+            style={{
+              borderTopWidth: 6,
+              borderTopColor: "#F2F2F2",
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+            }}
+          >
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
               <Text style={{ color: PURPLE, fontSize: 20, fontWeight: "700", flex: 1 }}>Gastos</Text>
               <TouchableOpacity onPress={() => openAddModal("expense")}>
@@ -409,23 +499,49 @@ export default function BudgetPage() {
             </View>
 
             {expenses.map((g) => (
-              <View key={g.id} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: GRAY_BORDER, alignItems: "center" }}>
+              <View
+                key={g.id}
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  paddingVertical: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: GRAY_BORDER,
+                  alignItems: "center",
+                }}
+              >
                 <View>
                   <Text style={{ color: "#333", fontSize: 16 }}>{g.name}</Text>
-                  <Text style={{ color: "#777", fontSize: 12 }}>Gasto mensual el día {String(g.day).padStart(2, "0")}</Text>
+                  <Text style={{ color: "#777", fontSize: 12 }}>
+                    Gasto mensual el día {String(g.day).padStart(2, "0")}
+                  </Text>
+                  {g.isFixed && (
+                    <Text style={{ color: "#16a34a", fontSize: 12 }}>Gasto fijo</Text>
+                  )}
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Text style={{ color: "#111", fontSize: 22, fontWeight: "700" }}>{currency(g.amount)}</Text>
+                  <Text style={{ color: "#111", fontSize: 22, fontWeight: "700" }}>
+                    {currency(g.amount)}
+                  </Text>
                   <TouchableOpacity
                     onPress={(ev: any) => {
                       if (isWeb) {
                         const rect = ev?.target?.getBoundingClientRect?.();
-                        setMenu({ type: "expense", id: g.id, x: rect ? rect.left : 0, y: rect ? rect.bottom : 0 });
+                        setMenu({
+                          type: "expense",
+                          id: g.id,
+                          x: rect ? rect.left : 0,
+                          y: rect ? rect.bottom : 0,
+                        });
                       } else {
                         Alert.alert("Opciones", g.name, [
                           { text: "Editar", onPress: () => openEditModal("expense", g) },
-                          { text: "Eliminar", style: "destructive", onPress: () => confirmDelete("expense", g.id, g.name) },
-                          { text: "Cancelar", style: "cancel" }
+                          {
+                            text: "Eliminar",
+                            style: "destructive",
+                            onPress: () => confirmDelete("expense", g.id, g.name),
+                          },
+                          { text: "Cancelar", style: "cancel" },
                         ]);
                       }
                     }}
@@ -440,7 +556,7 @@ export default function BudgetPage() {
         </ScrollView>
       )}
 
-      {/* ===== Web Menu ===== */}
+      {/* Menú contextual web */}
       {isWeb && menu && (
         <>
           <View
@@ -492,17 +608,13 @@ export default function BudgetPage() {
               <Text style={{ color: "#b91c1c" }}>Eliminar</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={{ padding: 12 }}
-              onPress={() => setMenu(null)}
-            >
+            <TouchableOpacity style={{ padding: 12 }} onPress={() => setMenu(null)}>
               <Text>Cancelar</Text>
             </TouchableOpacity>
           </View>
         </>
       )}
 
-      {/* ===== Modal Unificado ===== */}
       <BudgetModal
         visible={modalState.visible}
         onClose={closeModal}
@@ -517,20 +629,37 @@ export default function BudgetPage() {
 /* ======== Estilos ======== */
 const styles = StyleSheet.create({
   input: {
-    borderBottomWidth: 1, borderBottomColor: GRAY_BORDER, paddingVertical: 10, fontSize: 16, color: "#111827",
+    borderBottomWidth: 1,
+    borderBottomColor: GRAY_BORDER,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: "#111827",
   },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-  modalCard: { backgroundColor: "#fff", padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
   modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 10 },
   label: { color: PURPLE, fontWeight: "700" },
   modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 12, marginTop: 16 },
   accessoryBar: {
-    backgroundColor: "#F6F6F8", borderTopWidth: StyleSheet.hairlineWidth, borderColor: "#D1D5DB",
-    paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center",
+    backgroundColor: "#F6F6F8",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: "#D1D5DB",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
   },
   accessoryBtn: { color: PURPLE, fontWeight: "700", fontSize: 16 },
 
-  // 🔹 NUEVOS estilos para el check "fijo"
   fixedRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -1,46 +1,77 @@
 // Service/budget/budget.service.ts
-// Contrato común + tipos. La implementación real está en *.native.ts / *.web.ts.
+// Solo tipos + stubs, las implementaciones reales están en .native / .web
 
 export type Income = {
   id: number;
   name: string;
   amount: number;
+  isFixed?: boolean;      // 🔹 nuevo
+  date?: string | null;   // reservado para historial
 };
 
 export type Expense = {
   id: number;
   name: string;
   amount: number;
-  day: number; // 1-31
+  day: number;
+  isFixed?: boolean;      // 🔹 nuevo
+  date?: string | null;   // reservado para historial
 };
 
-export type IncomeDTO = { name: string; amount: number };
-export type ExpenseDTO = { name: string; amount: number; day: number };
+// ====== Incomes ======
 
 export async function fetchIncomes(): Promise<Income[]> {
-  throw new Error("[budget] Sin implementación de plataforma (native/web).");
-}
-export async function fetchExpenses(): Promise<Expense[]> {
-  throw new Error("[budget] Sin implementación de plataforma (native/web).");
+  throw new Error("[Budget] Sin implementación de plataforma (native/web).");
 }
 
-export async function addIncome(_dto: IncomeDTO): Promise<Income> {
-  throw new Error("[budget] Sin implementación de plataforma (native/web).");
-}
-export async function addExpense(_dto: ExpenseDTO): Promise<Expense> {
-  throw new Error("[budget] Sin implementación de plataforma (native/web).");
+export async function addIncome(_data: {
+  name: string;
+  amount: number;
+  isFixed?: boolean;
+  date?: string;
+}): Promise<Income> {
+  throw new Error("[Budget] Sin implementación de plataforma (native/web).");
 }
 
-export async function updateIncome(_p: { id: number; name: string; amount: number }): Promise<Income> {
-  throw new Error("[budget] Sin implementación de plataforma (native/web).");
-}
-export async function updateExpense(_p: { id: number; name: string; amount: number; day: number }): Promise<Expense> {
-  throw new Error("[budget] Sin implementación de plataforma (native/web).");
+export async function updateIncome(_data: {
+  id: number;
+  name: string;
+  amount: number;
+  isFixed?: boolean;
+}): Promise<Income> {
+  throw new Error("[Budget] Sin implementación de plataforma (native/web).");
 }
 
 export async function deleteIncome(_id: number): Promise<void> {
-  throw new Error("[budget] Sin implementación de plataforma (native/web).");
+  throw new Error("[Budget] Sin implementación de plataforma (native/web).");
 }
+
+// ====== Expenses ======
+
+export async function fetchExpenses(): Promise<Expense[]> {
+  throw new Error("[Budget] Sin implementación de plataforma (native/web).");
+}
+
+export async function addExpense(_data: {
+  name: string;
+  amount: number;
+  day: number;
+  isFixed?: boolean;
+  date?: string;
+}): Promise<Expense> {
+  throw new Error("[Budget] Sin implementación de plataforma (native/web).");
+}
+
+export async function updateExpense(_data: {
+  id: number;
+  name: string;
+  amount: number;
+  day: number;
+  isFixed?: boolean;
+}): Promise<Expense> {
+  throw new Error("[Budget] Sin implementación de plataforma (native/web).");
+}
+
 export async function deleteExpense(_id: number): Promise<void> {
-  throw new Error("[budget] Sin implementación de plataforma (native/web).");
+  throw new Error("[Budget] Sin implementación de plataforma (native/web).");
 }
