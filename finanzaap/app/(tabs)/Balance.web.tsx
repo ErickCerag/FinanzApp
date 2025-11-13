@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ArrowLeft,
   Filter,
@@ -16,13 +17,12 @@ import {
   TrendingUp,
   PieChart,
   BarChart3,
-} from "lucide-react"; // ✅ correcto para web
-
+} from "lucide-react-native";
 import BottomNav from "@/components/BarraNav";
 
-
-// ... tu código igual que antes
-
+import { initDb } from "@/Service/DB_Conector";
+import { obtenerSesion } from "@/Service/user/user.service";
+import { obtenerWishlistConItems } from "@/Service/wishList/wishlist.service";
 
 // ==== ESTILOS Y HELPERS ====
 const PURPLE = "#6B21A8";
@@ -36,14 +36,13 @@ const currency = (v: number) =>
     maximumFractionDigits: 0,
   }).format(v);
 
-// ==== FUNCIONES LOCALES (mock backend) ====
+// ==== FUNCIONES LOCALES (mock backend para gastos) ====
 
 type Expense = { name: string; amount: number };
 type Goal = { name: string; progress: number };
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Simula traer Top 5 gastos del mes */
 async function fetchTopExpensesLocal(): Promise<Expense[]> {
   await wait(500);
   return [
@@ -55,39 +54,79 @@ async function fetchTopExpensesLocal(): Promise<Expense[]> {
   ];
 }
 
-/** Simula traer progreso de metas */
-async function fetchGoalsProgressLocal(): Promise<Goal[]> {
-  await wait(500);
-  return [
-    { name: "Computador nuevo", progress: 100 },
-    { name: "Bicicleta", progress: 90 },
-    { name: "Entrada concierto", progress: 70 },
-  ];
+// Fallback por si aún no hay deseos o hay algún problema
+const DEFAULT_GOALS: Goal[] = [
+  { name: "Computador nuevo", progress: 100 },
+  { name: "Bicicleta", progress: 90 },
+  { name: "Entrada concierto", progress: 70 },
+];
+
+// 🔹 Metas reales desde Wishlist
+async function fetchGoalsFromWishlist(): Promise<Goal[]> {
+  try {
+    await initDb();
+    const u = await obtenerSesion();
+    const userId = u?.id_usuario ?? 1;
+
+    const { items } = await obtenerWishlistConItems(userId);
+
+    if (!items || items.length === 0) {
+      return DEFAULT_GOALS;
+    }
+
+    const mapped: Goal[] = items.map((it: any) => {
+      const name = it.Nombre ?? it.name ?? "Meta";
+
+      let rawProgress: number | undefined;
+
+      if (typeof it.progress === "number") rawProgress = it.progress;
+      else if (typeof it.Progreso === "number") rawProgress = it.Progreso;
+      else if (typeof it.Porcentaje === "number") rawProgress = it.Porcentaje;
+
+      // Si está marcado como completado, lo ponemos en 100%
+      if (
+        rawProgress === undefined &&
+        (it.Completado || it.completado || it.done || it.hecho)
+      ) {
+        rawProgress = 100;
+      }
+
+      const progress = Math.max(
+        0,
+        Math.min(100, rawProgress !== undefined ? rawProgress : 0)
+      );
+
+      return { name, progress };
+    });
+
+    return mapped.length > 0 ? mapped : DEFAULT_GOALS;
+  } catch (e) {
+    console.error("Error cargando metas desde wishlist:", e);
+    return DEFAULT_GOALS;
+  }
 }
 
-/** Simula exportar a PDF */
 async function exportExpensesPDFLocal(_params?: any) {
   await wait(400);
   return { ok: true, url: "/mock/report.pdf" };
 }
 
-/** Simula exportar a Excel */
 async function exportExpensesXLSXLocal(_params?: any) {
   await wait(400);
   return { ok: true, url: "/mock/report.xlsx" };
 }
 
-// ==== COMPONENTE ====
+// ==== COMPONENTE PRINCIPAL ====
 
-export default function BalancePage() {
+export default function BalanceWeb() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // filtros ficticios (listos para futuro modal)
   const [filters] = useState({
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
@@ -100,7 +139,7 @@ export default function BalancePage() {
         setLoading(true);
         const [e, g] = await Promise.all([
           fetchTopExpensesLocal(),
-          fetchGoalsProgressLocal(),
+          fetchGoalsFromWishlist(),
         ]);
         if (cancel) return;
         setExpenses(e);
@@ -154,12 +193,13 @@ export default function BalancePage() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      {/* AppBar */}
+      {/* ENCABEZADO MORADO */}
       <View
         style={{
           backgroundColor: PURPLE,
+          paddingTop: insets.top + 10,
           paddingHorizontal: 16,
-          paddingVertical: 18,
+          paddingBottom: 18,
           borderBottomLeftRadius: 12,
           borderBottomRightRadius: 12,
           shadowColor: "#000",
@@ -169,13 +209,22 @@ export default function BalancePage() {
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
-            <ArrowLeft color="#fff" size={40} />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={{
+              padding: 4,
+              borderRadius: 999,
+              backgroundColor: "rgba(255,255,255,0.1)",
+            }}
+          >
+            <ArrowLeft color="#fff" size={26} />
           </TouchableOpacity>
+
           <Text
             style={{
               color: "#fff",
-              fontSize: 25,
+              fontSize: 22,
               fontWeight: "700",
               marginLeft: 12,
             }}
@@ -185,14 +234,13 @@ export default function BalancePage() {
         </View>
       </View>
 
+      {/* CONTENIDO */}
       {loading ? (
         <View
           style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
         >
           <ActivityIndicator size="large" color={PURPLE} />
-          <Text style={{ marginTop: 10, color: "#555" }}>
-            Cargando datos…
-          </Text>
+          <Text style={{ marginTop: 10, color: "#555" }}>Cargando datos…</Text>
         </View>
       ) : error ? (
         <View style={{ padding: 16 }}>
@@ -200,7 +248,7 @@ export default function BalancePage() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-          {/* Card: Top 5 gastos del mes */}
+          {/* Top 5 Gastos */}
           <View
             style={{
               backgroundColor: "#fff",
@@ -221,7 +269,7 @@ export default function BalancePage() {
               <Text
                 style={{
                   color: PURPLE,
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: "700",
                   flex: 1,
                 }}
@@ -313,7 +361,10 @@ export default function BalancePage() {
               }}
             >
               <View
-                style={{ flexDirection: "row", justifyContent: "space-between" }}
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
               >
                 <Text style={{ color: "#555" }}>Total</Text>
                 <Text style={{ color: "#111", fontWeight: "700" }}>
@@ -323,7 +374,7 @@ export default function BalancePage() {
             </View>
           </View>
 
-          {/* Card: Progreso de metas */}
+          {/* Progreso de metas */}
           <View
             style={{
               backgroundColor: "#fff",
@@ -344,7 +395,7 @@ export default function BalancePage() {
               <Text
                 style={{
                   color: PURPLE,
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: "700",
                   flex: 1,
                 }}
@@ -396,6 +447,8 @@ export default function BalancePage() {
           </View>
         </ScrollView>
       )}
+
+      {/* Barra inferior */}
       <BottomNav active="balance" />
     </View>
   );

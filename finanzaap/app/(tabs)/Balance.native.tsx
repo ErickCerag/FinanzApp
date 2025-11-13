@@ -18,7 +18,11 @@ import {
   PieChart,
   BarChart3,
 } from "lucide-react-native";
+
 import BottomNav from "@/components/BarraNav";
+import { initDb } from "@/Service/DB_Conector";
+import { obtenerSesion } from "@/Service/user/user.service";
+import { obtenerWishlistConItems } from "@/Service/wishList/wishlist.service";
 
 // ==== ESTILOS Y HELPERS ====
 const PURPLE = "#6B21A8";
@@ -32,7 +36,7 @@ const currency = (v: number) =>
     maximumFractionDigits: 0,
   }).format(v);
 
-// ==== FUNCIONES LOCALES (mock backend) ====
+// ==== FUNCIONES LOCALES (mock backend para gastos) ====
 
 type Expense = { name: string; amount: number };
 type Goal = { name: string; progress: number };
@@ -50,13 +54,52 @@ async function fetchTopExpensesLocal(): Promise<Expense[]> {
   ];
 }
 
-async function fetchGoalsProgressLocal(): Promise<Goal[]> {
-  await wait(500);
-  return [
-    { name: "Computador nuevo", progress: 100 },
-    { name: "Bicicleta", progress: 90 },
-    { name: "Entrada concierto", progress: 70 },
-  ];
+const DEFAULT_GOALS: Goal[] = [
+  { name: "Computador nuevo", progress: 100 },
+  { name: "Bicicleta", progress: 90 },
+  { name: "Entrada concierto", progress: 70 },
+];
+
+async function fetchGoalsFromWishlist(): Promise<Goal[]> {
+  try {
+    await initDb();
+    const u = await obtenerSesion();
+    const userId = u?.id_usuario ?? 1;
+
+    const { items } = await obtenerWishlistConItems(userId);
+
+    if (!items || items.length === 0) {
+      return DEFAULT_GOALS;
+    }
+
+    const mapped: Goal[] = items.map((it: any) => {
+      const name = it.Nombre ?? it.name ?? "Meta";
+
+      let rawProgress: number | undefined;
+      if (typeof it.progress === "number") rawProgress = it.progress;
+      else if (typeof it.Progreso === "number") rawProgress = it.Progreso;
+      else if (typeof it.Porcentaje === "number") rawProgress = it.Porcentaje;
+
+      if (
+        rawProgress === undefined &&
+        (it.Completado || it.completado || it.done || it.hecho)
+      ) {
+        rawProgress = 100;
+      }
+
+      const progress = Math.max(
+        0,
+        Math.min(100, rawProgress !== undefined ? rawProgress : 0)
+      );
+
+      return { name, progress };
+    });
+
+    return mapped.length > 0 ? mapped : DEFAULT_GOALS;
+  } catch (e) {
+    console.error("Error cargando metas desde wishlist:", e);
+    return DEFAULT_GOALS;
+  }
 }
 
 async function exportExpensesPDFLocal(_params?: any) {
@@ -92,7 +135,7 @@ export default function BalanceScreen() {
         setLoading(true);
         const [e, g] = await Promise.all([
           fetchTopExpensesLocal(),
-          fetchGoalsProgressLocal(),
+          fetchGoalsFromWishlist(),
         ]);
         if (cancel) return;
         setExpenses(e);
@@ -146,13 +189,11 @@ export default function BalanceScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      {/* ===================== */}
-      {/* 🔹 ENCABEZADO MORADO 🔹 */}
-      {/* ===================== */}
+      {/* ENCABEZADO MORADO */}
       <View
         style={{
           backgroundColor: PURPLE,
-          paddingTop: insets.top + 10, // respeta notch / barra de estado
+          paddingTop: insets.top + 10,
           paddingHorizontal: 16,
           paddingBottom: 18,
           borderBottomLeftRadius: 12,
@@ -189,9 +230,7 @@ export default function BalanceScreen() {
         </View>
       </View>
 
-      {/* ===================== */}
-      {/* 🔹 CONTENIDO 🔹 */}
-      {/* ===================== */}
+      {/* CONTENIDO */}
       {loading ? (
         <View
           style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
@@ -217,7 +256,11 @@ export default function BalanceScreen() {
             }}
           >
             <View
-              style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
             >
               <Text
                 style={{
@@ -299,7 +342,9 @@ export default function BalanceScreen() {
                 }}
               >
                 <FileSpreadsheet size={18} color="#065f46" />
-                <Text style={{ color: "#065f46", fontWeight: "700" }}>EXCEL</Text>
+                <Text style={{ color: "#065f46", fontWeight: "700" }}>
+                  EXCEL
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -311,7 +356,12 @@ export default function BalanceScreen() {
                 paddingTop: 8,
               }}
             >
-              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
                 <Text style={{ color: "#555" }}>Total</Text>
                 <Text style={{ color: "#111", fontWeight: "700" }}>
                   {currency(totalExpenses)}
@@ -394,7 +444,7 @@ export default function BalanceScreen() {
         </ScrollView>
       )}
 
-      {/* 🔻 Barra de navegación inferior, igual que en otras vistas */}
+      {/* Barra inferior */}
       <BottomNav active="balance" />
     </View>
   );

@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, Plus, MoreHorizontal } from "lucide-react-native";
+import { ArrowLeft, Plus, MoreHorizontal, CheckSquare, Square } from "lucide-react-native";
 
 import {
   fetchIncomes, fetchExpenses,
@@ -59,6 +59,8 @@ function BudgetModal({
   const [name, setName] = useState("");
   const [amountRaw, setAmountRaw] = useState("");
   const [dayRaw, setDayRaw] = useState("01");
+  // 🔹 NUEVO: ¿es fijo?
+  const [isFixed, setIsFixed] = useState(false);
 
   // Refs para inputs
   const refAmount = useRef<TextInput>(null);
@@ -73,11 +75,15 @@ function BudgetModal({
         if (type === "expense") {
           setDayRaw(String((editingItem as Expense).day).padStart(2, "0"));
         }
+        // Si en el futuro Income/Expense tienen isFixed, lo tomamos;
+        // por ahora queda en false al crear.
+        setIsFixed((editingItem as any)?.isFixed ?? false);
       } else {
         // Valores por defecto para nuevo item
         setName(type === "income" ? "Sueldo" : "");
         setAmountRaw("");
         setDayRaw("01");
+        setIsFixed(false);
       }
     }
   }, [visible, isEditing, editingItem, type]);
@@ -101,6 +107,8 @@ function BudgetModal({
     } else {
       onSubmit({ name: trimmedName, amount });
     }
+
+    // 🔸 Por ahora isFixed no se envía a onSubmit; lo cableamos más adelante
   };
 
   const modalTitle = isEditing 
@@ -136,6 +144,20 @@ function BudgetModal({
               style={styles.input}
               inputAccessoryViewID={isIOS ? `acc-${type}-amount` : undefined}
             />
+
+            {/* 🔹 NUEVO: Check "fijo" */}
+            <View style={styles.fixedRow}>
+              <TouchableOpacity onPress={() => setIsFixed(v => !v)}>
+                {isFixed ? (
+                  <CheckSquare size={20} color={PURPLE} />
+                ) : (
+                  <Square size={20} color="#6B7280" />
+                )}
+              </TouchableOpacity>
+              <Text style={styles.fixedLabel}>
+                {type === "income" ? "¿Ingreso fijo?" : "¿Gasto fijo?"}
+              </Text>
+            </View>
 
             {/* Día (solo para gastos) */}
             {type === "expense" && (
@@ -507,4 +529,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center",
   },
   accessoryBtn: { color: PURPLE, fontWeight: "700", fontSize: 16 },
+
+  // 🔹 NUEVOS estilos para el check "fijo"
+  fixedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 8,
+  },
+  fixedLabel: {
+    fontSize: 14,
+    color: "#374151",
+  },
 });
