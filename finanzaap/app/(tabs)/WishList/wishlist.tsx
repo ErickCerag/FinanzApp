@@ -1,3 +1,4 @@
+// app/(tabs)/WishList/wishlist.tsx
 import React, { useState, useCallback, useRef } from "react";
 import {
   View,
@@ -19,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   obtenerWishlistConItems,
   actualizarDeseo,
+  actualizarProgresoDeseo,
   eliminarDeseo,
 } from "@/Service/wishList/wishlist.service";
 import { obtenerSesion } from "@/Service/user/user.service";
@@ -35,7 +37,7 @@ const onlyDigits = (s: string) => s.replace(/\D+/g, "");
 const currency = (v: number) =>
   new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(v);
 
-type UIItem = { id: number; name: string; price: number; done: boolean };
+type UIItem = { id: number; name: string; price: number; saved: number; done: boolean };
 
 function DoneBar({ nativeID, onDone }: { nativeID: string; onDone: () => void }) {
   if (!isIOS) return null;
@@ -62,12 +64,14 @@ export default function WishlistPage() {
   const [editing, setEditing] = useState<UIItem | null>(null);
   const [editName, setEditName] = useState("");
   const [editPriceRaw, setEditPriceRaw] = useState("");
+  const [editSavedRaw, setEditSavedRaw] = useState("");
 
   // Menú contextual (web)
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
 
   const refEditName = useRef<TextInput>(null);
   const refEditAmount = useRef<TextInput>(null);
+  const refEditSaved = useRef<TextInput>(null);
 
   const loadItems = useCallback(async () => {
     try {
@@ -83,12 +87,19 @@ export default function WishlistPage() {
       }
 
       const { wishlist, items: dbItems } = await obtenerWishlistConItems(uid);
-      const mapped: UIItem[] = (dbItems ?? []).map((it) => ({
-        id: it.id_wishlistDetalle,
-        name: it.Nombre,
-        price: Number(it.Monto ?? 0),
-        done: false,
-      }));
+      const mapped: UIItem[] = (dbItems ?? []).map((it) => {
+        const price = Number(it.Monto ?? 0);
+        const saved = Number(it.Ahorrado ?? 0);
+        const completedFlag = (it.Completado ?? 0) === 1;
+        const done = completedFlag || (price > 0 && saved >= price);
+        return {
+          id: it.id_wishlistDetalle,
+          name: it.Nombre,
+          price,
+          saved,
+          done,
+        };
+      });
       setItems(mapped);
       console.log("Total wishlist:", wishlist?.Total ?? 0);
     } catch (e) {
@@ -101,23 +112,46 @@ export default function WishlistPage() {
 
   useFocusEffect(useCallback(() => { loadItems(); }, [loadItems]));
 
-  const toggleDone = (id: number) => {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)));
+  const toggleDone = async (id: number) => {
+    const target = items.find((i) => i.id === id);
+    if (!target) return;
+
+    const newDone = !target.done;
+    const newSaved = newDone ? Math.max(target.saved, target.price) : target.saved;
+
+    // optimista
+    setItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, done: newDone, saved: newSaved } : it))
+    );
+
+    try {
+      await actualizarProgresoDeseo(id, newSaved, newDone ? 1 : 0);
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "No se pudo actualizar el estado del deseo.");
+      // revertimos
+      setItems((prev) =>
+        prev.map((it) => (it.id === id ? { ...it, done: target.done, saved: target.saved } : it))
+      );
+    }
   };
 
   const openEdit = (item: UIItem) => {
     setEditing(item);
     setEditName(item.name);
     setEditPriceRaw(String(item.price || 0));
+    setEditSavedRaw(String(item.saved || 0));
     setOpenMenuId(null);
   };
 
   // Confirmación + eliminación (web)
   const confirmDeleteWeb = async (item: UIItem) => {
-    // window.confirm existe en web; en native no se usa este flujo
     // eslint-disable-next-line no-restricted-globals
     const ok = typeof window !== "undefined" ? window.confirm(`¿Eliminar "${item.name}" definitivamente?`) : false;
-    if (!ok) { setOpenMenuId(null); return; }
+    if (!ok) {
+      setOpenMenuId(null);
+      return;
+    }
     try {
       await eliminarDeseo(item.id);
       setOpenMenuId(null);
@@ -128,14 +162,22 @@ export default function WishlistPage() {
     }
   };
 
-  // Confirmación + eliminación (native) ya estaba con Alert
+  // Confirmación + eliminación (native)
   const confirmDeleteNative = (item: UIItem) => {
     Alert.alert("Eliminar deseo", `¿Seguro que deseas eliminar "${item.name}"?`, [
       { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: async () => {
-          try { await eliminarDeseo(item.id); await loadItems(); }
-          catch (e) { console.error(e); Alert.alert("Error", "No se pudo eliminar el deseo."); }
-        }
+      {
+        text: "Eliminar",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await eliminarDeseo(item.id);
+            await loadItems();
+          } catch (e) {
+            console.error(e);
+            Alert.alert("Error", "No se pudo eliminar el deseo.");
+          }
+        },
       },
     ]);
   };
@@ -145,7 +187,6 @@ export default function WishlistPage() {
       setOpenMenuId((prev) => (prev === item.id ? null : item.id));
       return;
     }
-    // Nativo: Alert con opciones
     Alert.alert("Opciones", item.name, [
       { text: "Editar", onPress: () => openEdit(item) },
       { text: "Eliminar", style: "destructive", onPress: () => confirmDeleteNative(item) },
@@ -158,7 +199,15 @@ export default function WishlistPage() {
     try {
       const nombre = editName.trim() || "Sin nombre";
       const monto = Number(onlyDigits(editPriceRaw) || "0");
+      let ahorrado = Number(onlyDigits(editSavedRaw) || "0");
+      if (ahorrado < 0) ahorrado = 0;
+      if (monto > 0 && ahorrado > monto) ahorrado = monto;
+
+      const done = monto > 0 && ahorrado >= monto ? 1 : 0;
+
       await actualizarDeseo(editing.id, nombre, monto, null, null);
+      await actualizarProgresoDeseo(editing.id, ahorrado, done);
+
       setEditing(null);
       await loadItems();
     } catch (e) {
@@ -205,7 +254,14 @@ export default function WishlistPage() {
         contentContainerStyle={{ paddingTop: 16, paddingBottom: (insets.bottom || 0) + 80 }}
       >
         {/* Encabezado */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
           <Text style={{ color: PURPLE, fontSize: 18, fontWeight: "700" }}>Nuevo deseo</Text>
           <TouchableOpacity
             onPress={() => router.push("/(tabs)/WishList/AddWish")}
@@ -240,6 +296,13 @@ export default function WishlistPage() {
         ) : (
           items.map((item) => {
             const menuOpen = openMenuId === item.id;
+            const remaining = Math.max(0, item.price - item.saved);
+            const message = item.done
+              ? "Felicitaciones, lo lograste !"
+              : remaining > 0
+              ? `Estás a ${currency(remaining)} de obtenerlo`
+              : "";
+
             return (
               <View
                 key={item.id}
@@ -263,11 +326,22 @@ export default function WishlistPage() {
 
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Text style={{ flex: 1, fontWeight: "700", color: "#111", fontSize: 16 }} numberOfLines={1}>
+                    <Text
+                      style={{ flex: 1, fontWeight: "700", color: "#111", fontSize: 16 }}
+                      numberOfLines={1}
+                    >
                       {item.name}
                     </Text>
 
-                    <Text style={{ width: 110, textAlign: "right", fontWeight: "700", color: "#111", fontSize: 16 }}>
+                    <Text
+                      style={{
+                        width: 110,
+                        textAlign: "right",
+                        fontWeight: "700",
+                        color: "#111",
+                        fontSize: 16,
+                      }}
+                    >
                       {currency(item.price)}
                     </Text>
 
@@ -280,14 +354,27 @@ export default function WishlistPage() {
                     </TouchableOpacity>
                   </View>
 
+                  {/* Mensaje de progreso */}
+                  {message ? (
+                    <Text
+                      style={{
+                        marginTop: 6,
+                        color: "#111",
+                        fontSize: 13,
+                      }}
+                    >
+                      {message}
+                    </Text>
+                  ) : null}
+
                   {/* Menú contextual (solo web) */}
                   {isWeb && menuOpen && (
                     <>
                       {/* overlay para cerrar con clic fuera */}
                       <View
-                        onTouchEnd={() => setOpenMenuId(null)}
                         // @ts-ignore RNW web
                         style={menuStyles.overlay}
+                        onTouchEnd={() => setOpenMenuId(null)}
                       />
                       <View style={menuStyles.menu}>
                         <TouchableOpacity onPress={() => openEdit(item)} style={menuStyles.menuItem}>
@@ -316,7 +403,10 @@ export default function WishlistPage() {
       {/* MODAL EDITAR */}
       <Modal visible={!!editing} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
         <View style={styles.modalBackdrop}>
-          <KeyboardAvoidingView behavior={isIOS ? "padding" : undefined} keyboardVerticalOffset={isIOS ? insets.top + 12 : 0}>
+          <KeyboardAvoidingView
+            behavior={isIOS ? "padding" : undefined}
+            keyboardVerticalOffset={isIOS ? insets.top + 12 : 0}
+          >
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>Editar deseo</Text>
 
@@ -331,11 +421,30 @@ export default function WishlistPage() {
                 blurOnSubmit
               />
 
-              <Text style={[styles.label, { marginTop: 12 }]}>Monto</Text>
+              <Text style={[styles.label, { marginTop: 12 }]}>Monto total del deseo</Text>
               <TextInput
                 ref={refEditAmount}
-                value={Number(onlyDigits(editPriceRaw) || "0") > 0 ? currency(Number(onlyDigits(editPriceRaw))) : ""}
+                value={
+                  Number(onlyDigits(editPriceRaw) || "0") > 0
+                    ? currency(Number(onlyDigits(editPriceRaw)))
+                    : ""
+                }
                 onChangeText={(t) => setEditPriceRaw(onlyDigits(t))}
+                placeholder="$ 0"
+                keyboardType={isIOS ? "number-pad" : "numeric"}
+                style={styles.input}
+                inputAccessoryViewID={isIOS ? "acc-wish-edit" : undefined}
+              />
+
+              <Text style={[styles.label, { marginTop: 12 }]}>Monto ahorrado</Text>
+              <TextInput
+                ref={refEditSaved}
+                value={
+                  Number(onlyDigits(editSavedRaw) || "0") > 0
+                    ? currency(Number(onlyDigits(editSavedRaw)))
+                    : ""
+                }
+                onChangeText={(t) => setEditSavedRaw(onlyDigits(t))}
                 placeholder="$ 0"
                 keyboardType={isIOS ? "number-pad" : "numeric"}
                 style={styles.input}
@@ -358,6 +467,7 @@ export default function WishlistPage() {
           nativeID="acc-wish-edit"
           onDone={() => {
             refEditAmount.current?.blur();
+            refEditSaved.current?.blur();
             Keyboard.dismiss();
           }}
         />

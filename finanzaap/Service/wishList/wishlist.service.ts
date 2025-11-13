@@ -1,11 +1,17 @@
 // Service/wishList/wishlist.service.ts
+
 export type WishlistRow = { id_wishlist: number; Total: number };
+
 export type WishlistItemRow = {
-  id_wishlistDetalle: number;     // ← clave para editar/eliminar
+  id_wishlistDetalle: number; // clave para editar/eliminar
   Nombre: string;
   Monto: number;
   FechaLimite?: string | null;
   Descripcion?: string | null;
+
+  // NUEVO: progreso
+  Ahorrado?: number;     // monto ahorrado
+  Completado?: number;   // 0 / 1
 };
 
 export async function crearWishlistSiNoExiste(_idUsuario: number): Promise<number> {
@@ -28,7 +34,7 @@ export async function obtenerWishlistConItems(
   throw new Error("[Wishlist] Sin implementación de plataforma (native/web).");
 }
 
-/** NUEVO: actualizar un deseo */
+/** Actualizar datos base de un deseo (nombre/monto/fecha/descripcion) */
 export async function actualizarDeseo(
   _idWishlistDetalle: number,
   _nombre: string,
@@ -39,7 +45,16 @@ export async function actualizarDeseo(
   throw new Error("[Wishlist] Sin implementación de plataforma (native/web).");
 }
 
-/** NUEVO: eliminar un deseo */
+/** NUEVO: actualizar solo progreso (ahorro + completado) */
+export async function actualizarProgresoDeseo(
+  _idWishlistDetalle: number,
+  _ahorrado: number,
+  _completado: number
+): Promise<void> {
+  throw new Error("[Wishlist] Sin implementación de plataforma (native/web).");
+}
+
+/** Eliminar un deseo */
 export async function eliminarDeseo(
   _idWishlistDetalle: number
 ): Promise<void> {

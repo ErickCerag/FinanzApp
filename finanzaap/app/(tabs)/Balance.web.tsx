@@ -1,14 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
+// app/Balance.web.tsx
+import React, { useMemo, useState, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ArrowLeft,
   Filter,
@@ -19,12 +17,10 @@ import {
   BarChart3,
 } from "lucide-react-native";
 import BottomNav from "@/components/BarraNav";
-
-import { initDb } from "@/Service/DB_Conector";
+import { useRouter, useFocusEffect } from "expo-router";
 import { obtenerSesion } from "@/Service/user/user.service";
 import { obtenerWishlistConItems } from "@/Service/wishList/wishlist.service";
 
-// ==== ESTILOS Y HELPERS ====
 const PURPLE = "#6B21A8";
 const GREEN = "#15803d";
 const GRAY_BORDER = "#e5e7eb";
@@ -36,91 +32,28 @@ const currency = (v: number) =>
     maximumFractionDigits: 0,
   }).format(v);
 
-// ==== FUNCIONES LOCALES (mock backend para gastos) ====
-
 type Expense = { name: string; amount: number };
 type Goal = { name: string; progress: number };
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchTopExpensesLocal(): Promise<Expense[]> {
-  await wait(500);
-  return [
-    { name: "Arriendo", amount: 350000 },
-    { name: "Alimentación", amount: 100000 },
-    { name: "Entretenimiento", amount: 50000 },
-    { name: "Transporte", amount: 35000 },
-    { name: "Plan teléfono", amount: 15000 },
-  ];
-}
-
-// Fallback por si aún no hay deseos o hay algún problema
-const DEFAULT_GOALS: Goal[] = [
-  { name: "Computador nuevo", progress: 100 },
-  { name: "Bicicleta", progress: 90 },
-  { name: "Entrada concierto", progress: 70 },
-];
-
-// 🔹 Metas reales desde Wishlist
-async function fetchGoalsFromWishlist(): Promise<Goal[]> {
-  try {
-    await initDb();
-    const u = await obtenerSesion();
-    const userId = u?.id_usuario ?? 1;
-
-    const { items } = await obtenerWishlistConItems(userId);
-
-    if (!items || items.length === 0) {
-      return DEFAULT_GOALS;
-    }
-
-    const mapped: Goal[] = items.map((it: any) => {
-      const name = it.Nombre ?? it.name ?? "Meta";
-
-      let rawProgress: number | undefined;
-
-      if (typeof it.progress === "number") rawProgress = it.progress;
-      else if (typeof it.Progreso === "number") rawProgress = it.Progreso;
-      else if (typeof it.Porcentaje === "number") rawProgress = it.Porcentaje;
-
-      // Si está marcado como completado, lo ponemos en 100%
-      if (
-        rawProgress === undefined &&
-        (it.Completado || it.completado || it.done || it.hecho)
-      ) {
-        rawProgress = 100;
-      }
-
-      const progress = Math.max(
-        0,
-        Math.min(100, rawProgress !== undefined ? rawProgress : 0)
-      );
-
-      return { name, progress };
-    });
-
-    return mapped.length > 0 ? mapped : DEFAULT_GOALS;
-  } catch (e) {
-    console.error("Error cargando metas desde wishlist:", e);
-    return DEFAULT_GOALS;
-  }
+  await wait(300);
+  return [{ name: "Arriendo", amount: 120000 }];
 }
 
 async function exportExpensesPDFLocal(_params?: any) {
-  await wait(400);
+  await wait(200);
   return { ok: true, url: "/mock/report.pdf" };
 }
 
 async function exportExpensesXLSXLocal(_params?: any) {
-  await wait(400);
+  await wait(200);
   return { ok: true, url: "/mock/report.xlsx" };
 }
 
-// ==== COMPONENTE PRINCIPAL ====
-
 export default function BalanceWeb() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -132,29 +65,67 @@ export default function BalanceWeb() {
     year: new Date().getFullYear(),
   });
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     let cancel = false;
-    (async () => {
-      try {
-        setLoading(true);
-        const [e, g] = await Promise.all([
-          fetchTopExpensesLocal(),
-          fetchGoalsFromWishlist(),
-        ]);
+
+    setLoading(true);
+    try {
+      const [e] = await Promise.all([fetchTopExpensesLocal()]);
+      if (cancel) return;
+      setExpenses(e);
+
+      const u = await obtenerSesion();
+      const uid = u?.id_usuario ?? null;
+      if (!uid) {
+        setGoals([]);
+      } else {
+        const { items } = await obtenerWishlistConItems(uid);
         if (cancel) return;
-        setExpenses(e);
-        setGoals(g);
-      } catch (err) {
-        console.error(err);
-        setError("No se pudieron cargar los datos.");
-      } finally {
-        if (!cancel) setLoading(false);
+
+        const mapped: Goal[] = items.map((it) => {
+          const total = Number(it.Monto || 0);
+          const saved = Number(it.Ahorrado || 0);
+          const completed = (it.Completado ?? 0) === 1;
+
+          let progress = 0;
+          if (total > 0) {
+            progress = Math.round(
+              Math.min(100, (Math.max(saved, 0) / total) * 100)
+            );
+          }
+          if (completed) progress = 100;
+          return { name: it.Nombre, progress };
+        });
+
+        setGoals(mapped);
       }
-    })();
+
+      setError(null);
+    } catch (err) {
+      console.error(err);
+      setError("No se pudieron cargar los datos.");
+    } finally {
+      if (!cancel) setLoading(false);
+    }
+
     return () => {
       cancel = true;
     };
-  }, [filters]);
+  }, []);
+
+  // 🔹 Igual que en native: recarga al enfocarse la vista
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      (async () => {
+        if (!active) return;
+        await loadData();
+      })();
+      return () => {
+        active = false;
+      };
+    }, [loadData, filters])
+  );
 
   const totalExpenses = useMemo(
     () => expenses.reduce((a, b) => a + b.amount, 0),
@@ -162,19 +133,17 @@ export default function BalanceWeb() {
   );
 
   const handleFilter = () => {
-    Alert.alert("Filtros", `Mes: ${filters.month} / Año: ${filters.year}`);
+    alert(`Mes: ${filters.month} / Año: ${filters.year}`);
   };
 
   const exportPDF = async () => {
     try {
       const res = await exportExpensesPDFLocal({ filters, expenses });
       if (res.ok) {
-        Alert.alert("PDF generado", "Abrir reporte", [
-          { text: "Abrir", onPress: () => console.log("open", res.url) },
-        ]);
+        alert("PDF generado (mock)");
       }
     } catch {
-      Alert.alert("Error", "No se pudo exportar a PDF.");
+      alert("No se pudo exportar a PDF.");
     }
   };
 
@@ -182,36 +151,45 @@ export default function BalanceWeb() {
     try {
       const res = await exportExpensesXLSXLocal({ filters, expenses });
       if (res.ok) {
-        Alert.alert("Excel generado", "Abrir reporte", [
-          { text: "Abrir", onPress: () => console.log("open", res.url) },
-        ]);
+        alert("Excel generado (mock)");
       }
     } catch {
-      Alert.alert("Error", "No se pudo exportar a Excel.");
+      alert("No se pudo exportar a Excel.");
     }
   };
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#fff" }}>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <ActivityIndicator size="large" color={PURPLE} />
+          <Text style={{ marginTop: 10, color: "#555" }}>Cargando datos…</Text>
+        </View>
+        <BottomNav active="balance" />
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      {/* ENCABEZADO MORADO */}
+      {/* HEADER */}
       <View
         style={{
           backgroundColor: PURPLE,
-          paddingTop: insets.top + 10,
+          paddingTop: 10,
           paddingHorizontal: 16,
           paddingBottom: 18,
-          borderBottomLeftRadius: 12,
-          borderBottomRightRadius: 12,
-          shadowColor: "#000",
-          shadowOpacity: 0.15,
-          shadowRadius: 8,
-          elevation: 2,
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <TouchableOpacity
             onPress={() => router.back()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={{
               padding: 4,
               borderRadius: 999,
@@ -234,20 +212,12 @@ export default function BalanceWeb() {
         </View>
       </View>
 
-      {/* CONTENIDO */}
-      {loading ? (
-        <View
-          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-        >
-          <ActivityIndicator size="large" color={PURPLE} />
-          <Text style={{ marginTop: 10, color: "#555" }}>Cargando datos…</Text>
-        </View>
-      ) : error ? (
+      {error ? (
         <View style={{ padding: 16 }}>
           <Text style={{ color: "#b91c1c" }}>{error}</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
           {/* Top 5 Gastos */}
           <View
             style={{
@@ -260,11 +230,7 @@ export default function BalanceWeb() {
             }}
           >
             <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 8,
-              }}
+              style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
             >
               <Text
                 style={{
@@ -346,9 +312,7 @@ export default function BalanceWeb() {
                 }}
               >
                 <FileSpreadsheet size={18} color="#065f46" />
-                <Text style={{ color: "#065f46", fontWeight: "700" }}>
-                  EXCEL
-                </Text>
+                <Text style={{ color: "#065f46", fontWeight: "700" }}>EXCEL</Text>
               </TouchableOpacity>
             </View>
 
@@ -360,12 +324,7 @@ export default function BalanceWeb() {
                 paddingTop: 8,
               }}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                }}
-              >
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                 <Text style={{ color: "#555" }}>Total</Text>
                 <Text style={{ color: "#111", fontWeight: "700" }}>
                   {currency(totalExpenses)}
@@ -448,7 +407,6 @@ export default function BalanceWeb() {
         </ScrollView>
       )}
 
-      {/* Barra inferior */}
       <BottomNav active="balance" />
     </View>
   );

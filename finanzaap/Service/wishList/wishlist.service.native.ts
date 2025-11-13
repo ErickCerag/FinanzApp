@@ -24,6 +24,18 @@ async function ensureSchema() {
       FOREIGN KEY(id_wishlist) REFERENCES Wishlist(id_wishlist)
     );
   `);
+
+  // 🔹 Nuevas columnas (idempotentes)
+  try {
+    await db.execAsync?.(
+      `ALTER TABLE WishListDetalle ADD COLUMN Ahorrado REAL NOT NULL DEFAULT 0;`
+    );
+  } catch {}
+  try {
+    await db.execAsync?.(
+      `ALTER TABLE WishListDetalle ADD COLUMN Completado INTEGER NOT NULL DEFAULT 0;`
+    );
+  } catch {}
 }
 
 export async function crearWishlistSiNoExiste(idUsuario: number): Promise<number> {
@@ -59,8 +71,8 @@ export async function agregarDeseo(
   await db.execAsync?.("BEGIN TRANSACTION;");
   try {
     await db.runAsync?.(
-      `INSERT INTO WishListDetalle (id_wishlist, Nombre, Monto, FechaLimite, Descripcion)
-       VALUES (?, ?, ?, ?, ?);`,
+      `INSERT INTO WishListDetalle (id_wishlist, Nombre, Monto, FechaLimite, Descripcion, Ahorrado, Completado)
+       VALUES (?, ?, ?, ?, ?, 0, 0);`,
       [idWishlist, nombre, Number(monto) || 0, fechaLimite ?? null, descripcion ?? null]
     );
 
@@ -94,7 +106,7 @@ export async function obtenerWishlistConItems(
   if (!wl) return { wishlist: null, items: [] };
 
   const items = await db.getAllAsync?.(
-    `SELECT id_wishlistDetalle, Nombre, Monto, FechaLimite, Descripcion
+    `SELECT id_wishlistDetalle, Nombre, Monto, FechaLimite, Descripcion, Ahorrado, Completado
        FROM WishListDetalle
       WHERE id_wishlist = ?
       ORDER BY id_wishlistDetalle DESC;`,
@@ -107,7 +119,7 @@ export async function obtenerWishlistConItems(
   };
 }
 
-/** NUEVO: actualizar */
+/** Actualizar datos base (nombre/monto/fecha/descripcion) */
 export async function actualizarDeseo(
   idWishlistDetalle: number,
   nombre: string,
@@ -151,7 +163,24 @@ export async function actualizarDeseo(
   }
 }
 
-/** NUEVO: eliminar */
+/** NUEVO: actualizar solo ahorro + completado */
+export async function actualizarProgresoDeseo(
+  idWishlistDetalle: number,
+  ahorrado: number,
+  completado: number
+): Promise<void> {
+  await ensureSchema();
+  const db: any = await getDb();
+
+  await db.runAsync?.(
+    `UPDATE WishListDetalle
+       SET Ahorrado = ?, Completado = ?
+     WHERE id_wishlistDetalle = ?;`,
+    [Number(ahorrado) || 0, completado ? 1 : 0, idWishlistDetalle]
+  );
+}
+
+/** Eliminar */
 export async function eliminarDeseo(idWishlistDetalle: number): Promise<void> {
   await ensureSchema();
   const db: any = await getDb();

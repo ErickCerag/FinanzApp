@@ -2,11 +2,14 @@
 import type { WishlistRow, WishlistItemRow } from "./wishlist.service";
 
 type Item = {
-  idDetalle: number;               // ← ID consistente con RN
+  idDetalle: number;
   nombre: string;
   monto: number;
   fechaLimite?: string | null;
   descripcion?: string | null;
+
+  ahorrado?: number;
+  completado?: number; // 0/1
 };
 
 type Bucket = { items: Item[]; total: number };
@@ -15,10 +18,15 @@ type DB = Record<string, Bucket>;
 const KEY = "wishlists_v1";
 
 function load(): DB {
-  try { return JSON.parse(localStorage.getItem(KEY) || "{}"); }
-  catch { return {}; }
+  try {
+    return JSON.parse(localStorage.getItem(KEY) || "{}");
+  } catch {
+    return {};
+  }
 }
-function save(db: DB) { localStorage.setItem(KEY, JSON.stringify(db)); }
+function save(db: DB) {
+  localStorage.setItem(KEY, JSON.stringify(db));
+}
 
 function recalc(bucket: Bucket) {
   bucket.total = bucket.items.reduce((a, b) => a + (b.monto || 0), 0);
@@ -44,13 +52,15 @@ export async function agregarDeseo(
   const k = String(idWishlist);
   if (!db[k]) db[k] = { items: [], total: 0 };
 
-  const idDetalle = Date.now(); // Suficiente para demo (único)
+  const idDetalle = Date.now();
   db[k].items.unshift({
     idDetalle,
     nombre,
     monto: Number(monto) || 0,
     fechaLimite: fechaLimite ?? null,
     descripcion: descripcion ?? null,
+    ahorrado: 0,
+    completado: 0,
   });
   recalc(db[k]);
   save(db);
@@ -71,12 +81,14 @@ export async function obtenerWishlistConItems(
     Monto: x.monto,
     FechaLimite: x.fechaLimite ?? null,
     Descripcion: x.descripcion ?? null,
+    Ahorrado: x.ahorrado ?? 0,
+    Completado: x.completado ?? 0,
   }));
 
   return { wishlist: wl, items };
 }
 
-/** NUEVO: actualizar (web) */
+/** Actualizar datos base */
 export async function actualizarDeseo(
   idWishlistDetalle: number,
   nombre: string,
@@ -85,13 +97,13 @@ export async function actualizarDeseo(
   descripcion?: string | null
 ): Promise<void> {
   const db = load();
-  // Recorre todas las "listas" (por simplicidad)
   for (const k of Object.keys(db)) {
     const bucket = db[k];
-    const idx = bucket.items.findIndex(i => i.idDetalle === idWishlistDetalle);
+    const idx = bucket.items.findIndex((i) => i.idDetalle === idWishlistDetalle);
     if (idx >= 0) {
+      const prev = bucket.items[idx];
       bucket.items[idx] = {
-        ...bucket.items[idx],
+        ...prev,
         nombre,
         monto: Number(monto) || 0,
         fechaLimite: fechaLimite ?? null,
@@ -104,13 +116,36 @@ export async function actualizarDeseo(
   }
 }
 
-/** NUEVO: eliminar (web) */
+/** NUEVO: actualizar progreso (ahorro + completado) */
+export async function actualizarProgresoDeseo(
+  idWishlistDetalle: number,
+  ahorrado: number,
+  completado: number
+): Promise<void> {
+  const db = load();
+  for (const k of Object.keys(db)) {
+    const bucket = db[k];
+    const idx = bucket.items.findIndex((i) => i.idDetalle === idWishlistDetalle);
+    if (idx >= 0) {
+      const prev = bucket.items[idx];
+      bucket.items[idx] = {
+        ...prev,
+        ahorrado: Number(ahorrado) || 0,
+        completado: completado ? 1 : 0,
+      };
+      save(db);
+      return;
+    }
+  }
+}
+
+/** Eliminar */
 export async function eliminarDeseo(idWishlistDetalle: number): Promise<void> {
   const db = load();
   for (const k of Object.keys(db)) {
     const bucket = db[k];
     const lenBefore = bucket.items.length;
-    bucket.items = bucket.items.filter(i => i.idDetalle !== idWishlistDetalle);
+    bucket.items = bucket.items.filter((i) => i.idDetalle !== idWishlistDetalle);
     if (bucket.items.length !== lenBefore) {
       recalc(bucket);
       save(db);
