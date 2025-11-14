@@ -1,4 +1,4 @@
-// app/Balance.native.tsx
+// app/(tabs)/Balance.native.tsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View,
@@ -7,7 +7,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Platform,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,6 +20,10 @@ import {
   BarChart3,
 } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system";
+import * as LegacyFileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import * as Print from "expo-print";
 
 import BottomNav from "@/components/BarraNav";
 import { obtenerSesion } from "@/Service/user/user.service";
@@ -72,6 +75,7 @@ export default function BalanceScreen() {
     year: new Date().getFullYear(),
   });
 
+  // === Cargar filtro guardado (UX) ===
   useEffect(() => {
     (async () => {
       try {
@@ -85,7 +89,9 @@ export default function BalanceScreen() {
         ) {
           setFilter(saved);
         }
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     })();
   }, []);
 
@@ -93,9 +99,12 @@ export default function BalanceScreen() {
     setFilter(value);
     try {
       await AsyncStorage.setItem(FILTER_KEY, value);
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   }, []);
 
+  // === Cargar datos ===
   const loadData = useCallback(async () => {
     let cancel = false;
     setLoading(true);
@@ -107,7 +116,6 @@ export default function BalanceScreen() {
 
       const u = await obtenerSesion();
       const uid = u?.id_usuario ?? null;
-
       if (!uid) {
         setGoals([]);
       } else {
@@ -145,6 +153,7 @@ export default function BalanceScreen() {
     };
   }, []);
 
+  // Recargar cuando la pantalla gana foco
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -158,6 +167,7 @@ export default function BalanceScreen() {
     }, [loadData])
   );
 
+  // === Dataset según filtro ===
   const filteredRows = useMemo(() => {
     const incomeRows = incomes.map((i) => ({
       id: `inc-${i.id}`,
@@ -193,19 +203,7 @@ export default function BalanceScreen() {
     [filteredRows]
   );
 
-  const handleFilter = () => {
-    Alert.alert("Filtros", `Mes: ${filters.month} / Año: ${filters.year}`);
-  };
-
-  const exportPDF = async () => {
-    Alert.alert("PDF generado", "Abrir reporte", [{ text: "OK" }]);
-  };
-
-  const exportXLSX = async () => {
-    Alert.alert("Excel generado", "Abrir reporte", [{ text: "OK" }]);
-  };
-
-  // 🔥 agregado: Título dinámico
+  // Título dinámico
   const filterTitle = useMemo(() => {
     switch (filter) {
       case "incomes":
@@ -220,6 +218,135 @@ export default function BalanceScreen() {
         return "Top movimientos del mes";
     }
   }, [filter]);
+
+  const handleFilter = () => {
+    Alert.alert("Filtros", `Mes: ${filters.month} / Año: ${filters.year}`);
+  };
+
+  // ===== Exportar a PDF (nativo) =====
+  const exportPDF = async () => {
+    try {
+      const { month, year } = filters;
+      const monthStr = String(month).padStart(2, "0");
+
+      const rowsHtml = filteredRows
+        .map((r) => {
+          const tipo = r.kind === "income" ? "Ingreso" : "Gasto";
+          const categoria = r.isFixed ? "Fijo" : "Variable";
+          return `<tr>
+            <td>${tipo}</td>
+            <td>${categoria}</td>
+            <td>${r.name}</td>
+            <td style="text-align:right;">${currency(r.amount)}</td>
+          </tr>`;
+        })
+        .join("");
+
+      const html = `
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 16px; }
+              h1 { font-size: 18px; margin-bottom: 4px; }
+              h2 { font-size: 14px; margin-top: 0; color: #555; }
+              table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+              th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 12px; }
+              th { background: #f3f4f6; text-align: left; }
+            </style>
+          </head>
+          <body>
+            <h1>Balance FinanzApp</h1>
+            <h2>Mes ${monthStr} / ${year}</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Categoría</th>
+                  <th>Nombre</th>
+                  <th>Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: "Compartir balance en PDF",
+        });
+      } else {
+        Alert.alert("PDF generado", `Archivo guardado en:\n${uri}`);
+      }
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "No se pudo exportar a PDF.");
+    }
+  };
+
+  // ===== Exportar a CSV (Excel) =====
+  const exportXLSX = async () => {
+    try {
+      const { month, year } = filters;
+      const monthStr = String(month).padStart(2, "0");
+
+      let csv = `Balance FinanzApp;${monthStr}/${year}\n\n`;
+      csv += "Tipo;Categoría;Nombre;Monto\n";
+
+      filteredRows.forEach((r) => {
+        const tipo = r.kind === "income" ? "Ingreso" : "Gasto";
+        const categoria = r.isFixed ? "Fijo" : "Variable";
+        csv += `${tipo};${categoria};${r.name};${r.amount}\n`;
+      });
+
+      const fileName = `balance-${year}-${monthStr}.csv`;
+
+      const legacyAny = LegacyFileSystem as any;
+      const baseDir: string =
+        legacyAny.documentDirectory ??
+        legacyAny.cacheDirectory ??
+        legacyAny.temporaryDirectory ??
+        (FileSystem as any).documentDirectory ??
+        (FileSystem as any).cacheDirectory ??
+        (FileSystem as any).temporaryDirectory ??
+        "";
+
+      if (!baseDir || baseDir === "/") {
+        Alert.alert(
+          "Error",
+          "No se encontró un directorio válido para guardar el archivo."
+        );
+        return;
+      }
+
+      const fileUri = baseDir + fileName;
+
+      // Usamos la API legacy explícitamente (sin opciones, por defecto UTF-8)
+      await legacyAny.writeAsStringAsync(fileUri, csv);
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "text/csv",
+          dialogTitle: "Compartir reporte Excel",
+          UTI: "public.comma-separated-values-text",
+        });
+      } else {
+        Alert.alert("Archivo generado", `Ruta:\n${fileUri}`);
+      }
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "No se pudo exportar a Excel.");
+    }
+  };
 
   if (loading) {
     return (
@@ -300,11 +427,11 @@ export default function BalanceScreen() {
           >
             {(
               [
-                ["Todo", "all"],
-                ["Ingresos", "incomes"],
-                ["Ingresos fijos", "incomesFixed"],
-                ["Gastos", "expenses"],
-                ["Gastos fijos", "expensesFixed"],
+                ["todo", "all"],
+                ["ingresos", "incomes"],
+                ["ingresos fijos", "incomesFixed"],
+                ["gastos", "expenses"],
+                ["gastos fijos", "expensesFixed"],
               ] as const
             ).map(([label, key]) => {
               const active = filter === key;
@@ -327,7 +454,7 @@ export default function BalanceScreen() {
             })}
           </View>
 
-          {/* Top movimientos */}
+          {/* Top movimientos del mes */}
           <View
             style={{
               backgroundColor: "#fff",
@@ -339,13 +466,8 @@ export default function BalanceScreen() {
             }}
           >
             <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 8,
-              }}
+              style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
             >
-              {/* 🔥 aquí se usa el título dinámico */}
               <Text
                 style={{
                   color: PURPLE,
@@ -356,14 +478,11 @@ export default function BalanceScreen() {
               >
                 {filterTitle}
               </Text>
-
               <TouchableOpacity
                 onPress={handleFilter}
                 style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
-                <Text style={{ color: "#555", fontWeight: "600" }}>
-                  Filtrar
-                </Text>
+                <Text style={{ color: "#555", fontWeight: "600" }}>Filtrar</Text>
                 <Filter size={18} color="#111" />
               </TouchableOpacity>
             </View>
@@ -377,15 +496,9 @@ export default function BalanceScreen() {
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ color: "#111", fontSize: 16 }}>
-                    {e.name}
-                  </Text>
+                  <Text style={{ color: "#111", fontSize: 16 }}>{e.name}</Text>
                   <Text
-                    style={{
-                      color: "#111",
-                      fontSize: 16,
-                      fontWeight: "600",
-                    }}
+                    style={{ color: "#111", fontSize: 16, fontWeight: "600" }}
                   >
                     {currency(e.amount)}
                   </Text>
@@ -404,7 +517,6 @@ export default function BalanceScreen() {
               <Text style={{ color: PURPLE, fontWeight: "600" }}>
                 Exportar datos :
               </Text>
-
               <TouchableOpacity
                 onPress={exportPDF}
                 style={{
@@ -419,9 +531,7 @@ export default function BalanceScreen() {
                 }}
               >
                 <FileDown size={18} color="#b91c1c" />
-                <Text style={{ color: "#b91c1c", fontWeight: "700" }}>
-                  PDF
-                </Text>
+                <Text style={{ color: "#b91c1c", fontWeight: "700" }}>PDF</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
