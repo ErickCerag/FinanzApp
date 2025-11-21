@@ -1,0 +1,74 @@
+CREATE SCHEMA "public";
+CREATE TABLE "expense" (
+	"id" serial PRIMARY KEY,
+	"user_id" integer NOT NULL,
+	"name" text NOT NULL,
+	"amount" numeric(10, 2) DEFAULT '0' NOT NULL,
+	"day" integer DEFAULT 1 NOT NULL,
+	"isfixed" boolean DEFAULT false NOT NULL,
+	"date" timestamp with time zone,
+	"updated_at" timestamp with time zone DEFAULT now(),
+	"is_deleted" boolean DEFAULT false NOT NULL,
+	"installments_total" integer DEFAULT 0 NOT NULL,
+	"period" varchar(7)
+);
+CREATE TABLE "income" (
+	"id" serial PRIMARY KEY,
+	"user_id" integer NOT NULL,
+	"name" text NOT NULL,
+	"amount" numeric(10, 2) DEFAULT '0' NOT NULL,
+	"isfixed" boolean DEFAULT false NOT NULL,
+	"date" timestamp with time zone,
+	"updated_at" timestamp with time zone DEFAULT now(),
+	"is_deleted" boolean DEFAULT false NOT NULL,
+	"installments_total" integer DEFAULT 0 NOT NULL,
+	"period" varchar(7)
+);
+CREATE TABLE "schema_version" (
+	"id" integer PRIMARY KEY,
+	"version" integer NOT NULL,
+	CONSTRAINT "schema_version_id_check" CHECK (CHECK ((id = 1)))
+);
+CREATE TABLE "usersession" (
+	"id" integer PRIMARY KEY,
+	"real_user_id" integer,
+	CONSTRAINT "usersession_id_check" CHECK (CHECK ((id = 1)))
+);
+CREATE TABLE "usuario" (
+	"id_usuario" serial PRIMARY KEY,
+	"nombre" text NOT NULL,
+	"apellido" text,
+	"correo" text CONSTRAINT "usuario_correo_key" UNIQUE,
+	"contra" text,
+	"fechanacim" text,
+	"avatar" text
+);
+CREATE TABLE "wishlist" (
+	"id_wishlist" serial PRIMARY KEY,
+	"id_usuario" integer NOT NULL CONSTRAINT "uq_wishlist_usuario" UNIQUE,
+	"total" numeric(12, 2)
+);
+CREATE TABLE "wishlistdetalle" (
+	"id_wishlistdetalle" serial PRIMARY KEY,
+	"id_wishlist" integer NOT NULL,
+	"nombre" text,
+	"monto" numeric(12, 2),
+	"fechalimite" text,
+	"descripcion" text,
+	"ahorrado" numeric(12, 2) DEFAULT '0' NOT NULL,
+	"completado" integer DEFAULT 0 NOT NULL
+);
+ALTER TABLE "expense" ADD CONSTRAINT "expense_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "usuario"("id_usuario") ON DELETE CASCADE;
+ALTER TABLE "income" ADD CONSTRAINT "income_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "usuario"("id_usuario") ON DELETE CASCADE;
+ALTER TABLE "usersession" ADD CONSTRAINT "fk_usersession_usuario" FOREIGN KEY ("real_user_id") REFERENCES "usuario"("id_usuario");
+ALTER TABLE "wishlist" ADD CONSTRAINT "fk_wishlist_usuario" FOREIGN KEY ("id_usuario") REFERENCES "usuario"("id_usuario") ON DELETE CASCADE;
+ALTER TABLE "wishlistdetalle" ADD CONSTRAINT "fk_wishlistdetalle_wishlist" FOREIGN KEY ("id_wishlist") REFERENCES "wishlist"("id_wishlist") ON DELETE CASCADE;
+CREATE UNIQUE INDEX "expense_pkey" ON "expense" ("id");
+CREATE UNIQUE INDEX "income_pkey" ON "income" ("id");
+CREATE UNIQUE INDEX "schema_version_pkey" ON "schema_version" ("id");
+CREATE UNIQUE INDEX "usersession_pkey" ON "usersession" ("id");
+CREATE UNIQUE INDEX "usuario_correo_key" ON "usuario" ("correo");
+CREATE UNIQUE INDEX "usuario_pkey" ON "usuario" ("id_usuario");
+CREATE UNIQUE INDEX "uq_wishlist_usuario" ON "wishlist" ("id_usuario");
+CREATE UNIQUE INDEX "wishlist_pkey" ON "wishlist" ("id_wishlist");
+CREATE UNIQUE INDEX "wishlistdetalle_pkey" ON "wishlistdetalle" ("id_wishlistdetalle");
